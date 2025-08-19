@@ -151,3 +151,123 @@
     z-index: 3;
     pointer-events: auto;
 }
+
+/* --- FAB --- */
+.fab {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 30;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .12);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+}
+
+.fab i {
+    font-size: 14px;
+}
+
+/* --- Palette : dock DROITE par défaut --- */
+.palette {
+  --w: 280px;
+  position: absolute;
+  inset: 0 0 0 auto;            /* collé à DROITE */
+  width: var(--w);
+  transform: translateX(var(--w)); /* caché → glisse depuis la droite */
+  transition: transform 160ms ease;
+  background: #fff;
+  border-left: 1px solid #e5e7eb;  /* bord côté gauche du panneau */
+  border-right: 0;
+  box-shadow: 0 2px 20px rgba(0,0,0,.06);
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  z-index: 50;
+}
+
+.palette.open {
+  transform: translateX(0);       /* panneau visible */
+}
+
+/* (Optionnel) Variante dock GAUCHE si besoin */
+.palette.left {
+  inset: 0 auto 0 0;               /* collé à GAUCHE */
+  border-left: 0;
+  border-right: 1px solid #e5e7eb;
+  transform: translateX(calc(-1 * var(--w))); /* caché à gauche */
+}
+
+.palette__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    font-weight: 600;
+    border-bottom: 1px solid #eee;
+}
+
+.palette__close {
+    border: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: #f2f4f7;
+    cursor: pointer;
+}
+
+.palette__search {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.palette__search input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+}
+
+.palette__groups {
+    overflow: auto;
+    padding: 8px;
+}
+
+.palette__title {
+    margin: 10px 6px 6px;
+    font-size: 12px;
+    color: #667085;
+    text-transform: uppercase;
+}
+
+.palette__items {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.palette__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #fff;
+    cursor: grab;
+    user-select: none;
+}
+
+.palette__item:hover {
+    background: #f9fafb;
+}
+
+.palette__item i {
+    font-size: 16px;
+}

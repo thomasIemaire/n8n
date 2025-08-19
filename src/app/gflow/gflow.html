@@ -2,6 +2,34 @@
     (document:mousedown)="onDocMouseDown($event)" (document:mousemove)="onDocMouseMove($event)"
     (document:mouseup)="onDocMouseUp($event)">
 
+    <!-- FAB (bouton +) -->
+    <button class="fab" title="Ajouter un nœud" (mousedown)="$event.stopPropagation()" (click)="togglePalette($event)">
+        <i class="pi pi-plus"></i>
+    </button>
+
+    <!-- Palette de nœuds (dock gauche par défaut) -->
+    <aside class="palette" [class.open]="paletteOpen" [class.right]="paletteSide==='right'"
+        (mousedown)="$event.stopPropagation()">
+        <header class="palette__header">
+            <span>Noeuds</span>
+            <button class="palette__close" (click)="paletteOpen=false"><i class="pi pi-times"></i></button>
+        </header>
+
+        <div class="palette__groups">
+            <section class="palette__group" *ngFor="let g of paletteGroups">
+                <h4 class="palette__title">{{ g.name }}</h4>
+                <div class="palette__items">
+                    <button class="palette__item" *ngFor="let it of g.items" draggable="true"
+                        (dragstart)="onPaletteDragStart($event, it)" (click)="addFromPalette(it)">
+                        <i class="{{ it.icon }}"></i>
+                        <span>{{ it.label }}</span>
+                    </button>
+                </div>
+            </section>
+        </div>
+    </aside>
+
+
     <div class="canvas" (dblclick)="onDblClick($event)">
 
         <svg class="dot__background" preserveAspectRatio="none">
@@ -18,7 +46,7 @@
         </svg>
 
         <div class="world" [style.transform]="'translate(' + ox + 'px,' + oy + 'px) scale(' + scale + ')'"
-            style="transform-origin: 0 0;">
+            style="transform-origin: 0 0;" (dragover)="onWorldDragOver($event)" (drop)="onWorldDrop($event)">
 
             <svg class="wires">
                 <g *ngFor="let l of links">
