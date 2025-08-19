@@ -47,7 +47,7 @@
         }
 
         &.node-inputs__wrapper.conditional {
-            left: -12%;
+            left: -13%;
             gap: 61px;
         }
 
@@ -70,6 +70,7 @@
                 font-size: .75rem;
                 font-weight: 500;
                 color: var(--p-text-muted-color);
+                text-transform: capitalize;
 
                 &.output-port__name {
                     left: 100%;
