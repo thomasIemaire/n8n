@@ -1,0 +1,20 @@
+<div class="node__container">
+
+    <div class="node__wrapper" [class.start]="!item.inputs.length" [class.end]="!item.outputs.length"
+        [class.conditional]="item.type === 'if'">
+    </div>
+
+    <div class="node-inputs__wrapper"
+        [class.conditional]="item.type === 'if'">
+        <div class="input-port" *ngFor="let i of item.inputs; let idx = index" [attr.data-index]="idx">
+            <div *ngIf="i.name" class="input-port__name">{{ i.name }}</div>
+        </div>
+    </div>
+
+    <div class="node-outputs__wrapper"
+        [class.conditional]="item.type === 'if'">
+        <div class="output-port" *ngFor="let o of item.outputs; let idx = index" [attr.data-index]="idx">
+            <div *ngIf="o.name" class="output-port__name">{{ o.name }}</div>
+        </div>
+    </div>
+</div>

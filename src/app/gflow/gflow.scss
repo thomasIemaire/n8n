@@ -1,0 +1,153 @@
+.viewport__container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.canvas {
+    position: absolute;
+    inset: 0;
+}
+
+.dot__background {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.world {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: auto;
+    width: 100%;
+    height: 100%;
+    inset: 0;
+}
+
+.node {
+    position: absolute;
+    pointer-events: auto;
+    cursor: grab;
+    box-sizing: border-box;
+    z-index: 1;
+}
+
+.node-toolbar {
+    position: absolute;
+    transform: translate(-50%, calc(-100% - 8px));
+    /* centrée au-dessus du nœud */
+    display: flex;
+    gap: 6px;
+    padding: 4px;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, .1);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+    pointer-events: auto;
+    /* réactive les events dans .world */
+    z-index: 20;
+}
+
+.nt-btn {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #f2f4f7;
+}
+
+.nt-btn:hover {
+    background: #e6eaef;
+}
+
+.nt-btn i {
+    font-size: 12px;
+}
+
+.node.is-dragging {
+    cursor: grabbing;
+}
+
+.wires {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.wire {
+    fill: none;
+    stroke: var(--link-color, #8a98ad);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+
+.wire--preview {
+    stroke-dasharray: 6 6;
+    opacity: .8;
+}
+
+/* Large zone de hit « invisible » pour capter le survol */
+.wire-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 16;
+    vector-effect: non-scaling-stroke;
+    pointer-events: stroke;
+}
+
+/* Toolbar */
+.link-toolbar {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    /* centrée sur le point milieu */
+    display: flex;
+    gap: 6px;
+    padding: 4px;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, .1);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+    pointer-events: auto;
+    z-index: 10;
+}
+
+.link-btn {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 6px;
+    background: #f2f4f7;
+    cursor: pointer;
+}
+
+.link-btn:hover {
+    background: #e6eaef;
+}
+
+.link-btn i {
+    font-size: 12px;
+}
+
+.link-toolbar {
+    z-index: 2;
+    pointer-events: auto;
+}
+
+.node-toolbar {
+    z-index: 3;
+    pointer-events: auto;
+}

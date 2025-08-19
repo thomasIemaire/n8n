@@ -1,1 +1,62 @@
-/* You can add global styles to this file, and also import other style files */
+@import "primeicons/primeicons.css";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+:root {
+    --background-color-50: var(--p-surface-50);
+    --background-color-100: var(--p-surface-100);
+    --background-color-200: var(--p-surface-200);
+    --background-color-300: var(--p-surface-300);
+    --background-color-400: var(--p-surface-400);
+    --background-color-500: var(--p-surface-500);
+    --background-color-600: var(--p-surface-600);
+    --background-color-700: var(--p-surface-700);
+    --background-color-800: var(--p-surface-800);
+    --background-color-900: var(--p-surface-900);
+    --background-color-950: var(--p-surface-950);
+
+    --dot-size: 0.01rem;
+}
+
+.app-dark:root {
+    --background-color-50: var(--p-surface-950);
+    --background-color-100: var(--p-surface-900);
+    --background-color-200: var(--p-surface-800);
+    --background-color-300: var(--p-surface-700);
+    --background-color-400: var(--p-surface-600);
+    --background-color-500: var(--p-surface-500);
+    --background-color-600: var(--p-surface-400);
+    --background-color-700: var(--p-surface-300);
+    --background-color-800: var(--p-surface-200);
+    --background-color-900: var(--p-surface-100);
+    --background-color-950: var(--p-surface-50);
+}
+
+* {
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+
+    ::after,
+    ::before {
+        box-sizing: inherit;
+    }
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100dvh;
+    width: 100dvw;
+    font-size: 14px;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", Segoe UI Symbol;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    line-height: normal;
+    color: var(--p-text-color);
+    background-color: var(--background-color-50);
+}
+
+::selection {
+    background-color: var(--p-text-color);
+    color: var(--background-color-50);
+}

@@ -1,0 +1,94 @@
+.node__container {
+    height: calc(4 * 24px);
+    width: calc(4 * 24px);
+    position: relative;
+
+    .node__wrapper {
+        width: 100%;
+        height: 100%;
+        border-radius: .5rem;
+        border: 1px solid var(--background-color-400);
+        background-color: var(--background-color-50);
+
+        &.start {
+            border-top-left-radius: 2rem;
+            border-bottom-left-radius: 2rem;
+        }
+
+        &.end {
+            border-top-right-radius: 2rem;
+            border-bottom-right-radius: 2rem;
+        }
+
+        &.conditional {
+            rotate: 45deg;
+        }
+    }
+
+    .node-inputs__wrapper,
+    .node-outputs__wrapper {
+        position: absolute;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 38px;
+
+        &.node-outputs__wrapper {
+            left: 100%;
+
+            &.conditional {
+                left: 84%;
+                gap: 61px;
+            }
+        }
+
+        &.node-inputs__wrapper.conditional {
+            left: -12%;
+            gap: 61px;
+        }
+
+        .input-port,
+        .output-port {
+            position: relative;
+            width: 10px;
+            background-color: var(--background-color-400);
+            cursor: pointer;
+
+            .input-port__name,
+            .output-port__name {
+                position: absolute;
+                top: 50%;
+                transform: translateY(-50%);
+                margin: 0 .25rem;
+                padding: .125rem .25rem;
+                background-color: var(--background-color-50);
+                text-wrap: nowrap;
+                font-size: .75rem;
+                font-weight: 500;
+                color: var(--p-text-muted-color);
+
+                &.output-port__name {
+                    left: 100%;
+                }
+            }
+
+            &.input-port {
+                height: 20px;
+                border-radius: .25rem;
+            }
+
+            &.output-port {
+                height: 10px;
+                border-radius: 1rem;
+            }
+
+            &:hover {
+                background-color: var(--p-primary-500);
+            }
+        }
+    }
+}
