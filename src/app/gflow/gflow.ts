@@ -243,12 +243,13 @@ export class Gflow implements AfterViewInit, OnDestroy {
   }
 
   public onMouseMove(ev: MouseEvent) {
-    if (this.draggingNode || this.pendingLink) return; // pas de pan pendant drag / link
+    // pas de pan pendant drag de nœud ou création de lien
+    if (this.draggingNode || this.pendingLink) return;
+
     if (ev.buttons & 1) {
-      const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-      this.ox = Math.max(0, Math.min(this.ox + ev.movementX, rect.width - 1));
-      this.oy = Math.max(0, Math.min(this.oy + ev.movementY, rect.height - 1));
-      this.scheduleUpdateWires();
+      this.ox += ev.movementX;
+      this.oy += ev.movementY;
+      this.scheduleUpdateWires(); // garder les liens à jour
     }
   }
 
