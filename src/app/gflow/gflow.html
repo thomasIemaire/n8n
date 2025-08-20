@@ -1,91 +1,112 @@
-<div #viewport class="viewport__container" (wheel)="onWheel($event)" (mousemove)="onMouseMove($event)"
-    (document:mousedown)="onDocMouseDown($event)" (document:mousemove)="onDocMouseMove($event)"
-    (document:mouseup)="onDocMouseUp($event)">
-
-    <!-- FAB (bouton +) -->
-    <button class="fab" title="Ajouter un nœud" (mousedown)="$event.stopPropagation()" (click)="togglePalette($event)">
-        <i class="pi pi-plus"></i>
-    </button>
-
-    <!-- Palette de nœuds (dock gauche par défaut) -->
-    <aside class="palette" [class.open]="paletteOpen" [class.right]="paletteSide==='right'"
-        (mousedown)="$event.stopPropagation()">
-        <header class="palette__header">
-            <span>Noeuds</span>
-            <button class="palette__close" (click)="paletteOpen=false"><i class="pi pi-times"></i></button>
-        </header>
-
-        <div class="palette__groups">
-            <section class="palette__group" *ngFor="let g of paletteGroups">
-                <h4 class="palette__title">{{ g.name }}</h4>
-                <div class="palette__items">
-                    <button class="palette__item" *ngFor="let it of g.items" draggable="true"
-                        (dragstart)="onPaletteDragStart($event, it)" (click)="addFromPalette(it)">
-                        <i class="{{ it.icon }}"></i>
-                        <span>{{ it.label }}</span>
-                    </button>
-                </div>
-            </section>
+<div class="flow__container">
+    <div class="viewport__toolbar">
+        <div class="toolbar__title">
+            Flow creator
         </div>
-    </aside>
+        <div class="toolbar__menu">
+            <div class="toolbar-menu__item" (click)="togglePalette($event)">
+                Ajouter un nœud
+            </div>
+            <div class="toolbar-menu__item">
+                <span class="pi pi-arrow-up-right-and-arrow-down-left-from-center"></span>
+            </div>
+        </div>
+    </div>
+
+    <div #viewport class="viewport__container" (wheel)="onWheel($event)" (mousemove)="onMouseMove($event)"
+        (document:mousedown)="onDocMouseDown($event)" (document:mousemove)="onDocMouseMove($event)"
+        (document:mouseup)="onDocMouseUp($event)">
+
+        <!-- Palette de nœuds (dock gauche par défaut) -->
+        <aside class="palette" [class.open]="paletteOpen" [class.right]="paletteSide==='right'"
+            (mousedown)="$event.stopPropagation()">
+            <header class="palette__header">
+                <span>Noeuds</span>
+                <button class="palette__close" (click)="paletteOpen=false"><i class="pi pi-times"></i></button>
+            </header>
+
+            <div class="palette__groups">
+                <section class="palette__group" *ngFor="let g of paletteGroups">
+                    <h4 class="palette__title">{{ g.name }}</h4>
+                    <div class="palette__items">
+                        <button class="palette__item" *ngFor="let it of g.items" draggable="true"
+                            (dragstart)="onPaletteDragStart($event, it)" (click)="addFromPalette(it)">
+                            <i class="{{ it.icon }}"></i>
+                            <span>{{ it.label }}</span>
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </aside>
 
 
-    <div class="canvas" (dblclick)="onDblClick($event)">
+        <div class="canvas">
 
-        <svg class="dot__background" preserveAspectRatio="none">
-            <defs>
-                <pattern id="dots" patternUnits="userSpaceOnUse" [attr.width]="baseStep" [attr.height]="baseStep"
-                    [attr.patternTransform]="'translate(' + ox + ',' + oy + ') scale(' + scale + ')'">
-                    <circle [attr.cx]="baseStep/2" [attr.cy]="baseStep/2" [attr.r]="dotR"
-                        [attr.fill]="'var(--background-color-300)'"></circle>
-                </pattern>
-            </defs>
+            <svg class="dot__background" preserveAspectRatio="none">
+                <defs>
+                    <pattern id="dots" patternUnits="userSpaceOnUse" [attr.width]="baseStep" [attr.height]="baseStep"
+                        [attr.patternTransform]="'translate(' + ox + ',' + oy + ') scale(' + scale + ')'">
+                        <circle [attr.cx]="baseStep/2" [attr.cy]="baseStep/2" [attr.r]="dotR"
+                            [attr.fill]="'var(--background-color-300)'"></circle>
+                    </pattern>
+                </defs>
 
-            <rect x="0" y="0" width="100%" height="100%" [attr.fill]="'var(--background-color-50)'"></rect>
-            <rect x="0" y="0" width="100%" height="100%" fill="url(#dots)"></rect>
-        </svg>
-
-        <div class="world" [style.transform]="'translate(' + ox + 'px,' + oy + 'px) scale(' + scale + ')'"
-            style="transform-origin: 0 0;" (dragover)="onWorldDragOver($event)" (drop)="onWorldDrop($event)">
-
-            <svg class="wires">
-                <g *ngFor="let l of links">
-                    <path class="wire" [attr.d]="l.d"></path>
-                    <path class="wire-hit" [attr.d]="l.d" (mouseenter)="enterLink(l)" (mouseleave)="leaveLink()"></path>
-                </g>
-
-                <path class="wire wire--preview" *ngIf="pendingLink" [attr.d]="pendingPreviewD"></path>
+                <rect x="0" y="0" width="100%" height="100%" [attr.fill]="'var(--background-color-100)'"></rect>
+                <rect x="0" y="0" width="100%" height="100%" fill="url(#dots)"></rect>
             </svg>
 
-            <div class="link-toolbar" *ngIf="hoveredLink && hoveredLink.mid" [style.left.px]="hoveredLink.mid!.x"
-                [style.top.px]="hoveredLink.mid!.y" (mousedown)="$event.stopPropagation()"
-                (click)="$event.stopPropagation()" (mouseenter)="enterToolbar()" (mouseleave)="leaveToolbar()">
-                <button class="link-btn" title="Insérer un nœud" (click)="splitLink(hoveredLink!)">
-                    <i class="pi pi-plus"></i>
-                </button>
-                <button class="link-btn" title="Supprimer le lien" (click)="removeLink(hoveredLink!)">
-                    <i class="pi pi-trash"></i>
-                </button>
-            </div>
+            <div class="world" [style.transform]="'translate(' + ox + 'px,' + oy + 'px) scale(' + scale + ')'"
+                style="transform-origin: 0 0;" (dragover)="onWorldDragOver($event)" (drop)="onWorldDrop($event)">
 
-            <app-node class="node" *ngFor="let n of nodes" [attr.data-node-id]="n.id" [style.left.px]="n.x"
-                [style.top.px]="n.y" [style.width.px]="nodeSize" [style.height.px]="nodeSize"
-                (mousedown)="startDrag($event, n)" (mouseenter)="enterNode(n)" (mouseleave)="leaveNode()"
-                [class.is-dragging]="draggingNode?.id === n.id" [item]="n">
-            </app-node>
+                <svg class="wires">
+                    <defs>
+                        <marker id="arrow" viewBox="0 0 12 12" markerWidth="6" markerHeight="6" refX="10" refY="6" orient="auto"
+                            markerUnits="strokeWidth">
+                            <path class="arrow" d="M1,2.5 Q1,1.2 2.2,1.2 L10,6 L2.2,10.8 Q1,10.8 1,9.5 Z" />
+                        </marker>
+                    </defs>
 
-            <!-- TOOLBAR NŒUD -->
-            <div class="node-toolbar" *ngIf="hoveredNode" [style.left.px]="hoveredNode!.x + nodeSize/2"
-                [style.top.px]="hoveredNode!.y" (mousedown)="$event.stopPropagation()"
-                (click)="$event.stopPropagation()" (mouseenter)="enterNodeToolbar()" (mouseleave)="leaveNodeToolbar()">
+                    <g *ngFor="let l of links">
+                        <path class="wire" [attr.d]="l.d" marker-end="url(#arrow)"></path>
+                        <path class="wire-hit" [attr.d]="l.d" (mouseenter)="enterLink(l)" (mouseleave)="leaveLink()">
+                        </path>
+                    </g>
 
-                <!-- autres actions possibles ici (play, power, menu...) -->
-                <button class="nt-btn" title="Supprimer le nœud" (click)="deleteNode(hoveredNode!)">
-                    <i class="pi pi-trash"></i>
-                </button>
-                <button class="nt-btn" title="Paramétrer le nœud">
-                    <i class="pi pi-cog"></i>
-                </button>
+                    <path class="wire wire--preview" *ngIf="pendingLink" [attr.d]="pendingPreviewD"
+                        marker-end="url(#arrow)"></path>
+                </svg>
+
+                <div class="link-toolbar" *ngIf="hoveredLink && hoveredLink.mid" [style.left.px]="hoveredLink.mid!.x"
+                    [style.top.px]="hoveredLink.mid!.y" (mousedown)="$event.stopPropagation()"
+                    (click)="$event.stopPropagation()" (mouseenter)="enterToolbar()" (mouseleave)="leaveToolbar()">
+                    <button class="link-btn" title="Insérer un nœud" (click)="splitLink(hoveredLink!)">
+                        <i class="pi pi-plus"></i>
+                    </button>
+                    <button class="link-btn" title="Supprimer le lien" (click)="removeLink(hoveredLink!)">
+                        <i class="pi pi-trash"></i>
+                    </button>
+                </div>
+
+                <app-node class="node" *ngFor="let n of nodes" [attr.data-node-id]="n.id" [style.left.px]="n.x"
+                    [style.top.px]="n.y" [style.width.px]="nodeSize" [style.height.px]="nodeSize"
+                    (mousedown)="startDrag($event, n)" (mouseenter)="enterNode(n)" (mouseleave)="leaveNode()"
+                    [class.is-dragging]="draggingNode?.id === n.id" [item]="n">
+                </app-node>
+
+                <!-- TOOLBAR NŒUD -->
+                <div class="node-toolbar" *ngIf="hoveredNode" [style.left.px]="hoveredNode!.x + nodeSize/2"
+                    [style.top.px]="hoveredNode!.y" (mousedown)="$event.stopPropagation()"
+                    (click)="$event.stopPropagation()" (mouseenter)="enterNodeToolbar()"
+                    (mouseleave)="leaveNodeToolbar()">
+
+                    <!-- autres actions possibles ici (play, power, menu...) -->
+                    <button class="nt-btn" title="Supprimer le nœud" (click)="deleteNode(hoveredNode!)">
+                        <i class="pi pi-trash"></i>
+                    </button>
+                    <button class="nt-btn" title="Paramétrer le nœud">
+                        <i class="pi pi-cog"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </div>

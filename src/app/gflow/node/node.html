@@ -1,18 +1,36 @@
 <div class="node__container">
 
     <div class="node__wrapper" [class.start]="!item.inputs.length" [class.end]="!item.outputs.length"
-        [class.conditional]="item.type === 'if'">
+        [class.unconfigurable]="item.configured === undefined" [class.unconfigured]="!item.configured"
+        [class.if]="item.type === 'if'" [class.agent]="item.type === 'agent'">
+        @switch (item.type) {
+        @case ('start') { <span class="pi pi-caret-right"></span> }
+        @case ('end-success') { <span class="pi pi-check-circle"></span> }
+        @case ('end-error') { <span class="pi pi-times-circle"></span> }
+
+        @case ('if') { <span class="pi pi-arrow-right-arrow-left"></span> }
+        @case ('merge') { <span class="pi pi-sitemap"></span> }
+        @case ('edit') { <span class="pi pi-pencil"></span> }
+
+        @case ('sardine') { <span class="pi pi-send"></span> }
+        @case ('agent') { <span class="pi pi-microchip-ai"></span> }
+        @case ('agent-group') { <span class="pi pi-users"></span> }
+
+        @default { <span class="pi pi-plus"></span> }
+        }
     </div>
 
-    <div class="node-inputs__wrapper"
-        [class.conditional]="item.type === 'if'">
+    <div class="node__name" [class.if]="item.type === 'if'">
+        <span>{{ item.name }}</span>
+    </div>
+
+    <div class="node-inputs__wrapper" [class.if]="item.type === 'if'">
         <div class="input-port" *ngFor="let i of item.inputs; let idx = index" [attr.data-index]="idx">
             <div *ngIf="i.name" class="input-port__name">{{ i.name }}</div>
         </div>
     </div>
 
-    <div class="node-outputs__wrapper"
-        [class.conditional]="item.type === 'if'">
+    <div class="node-outputs__wrapper" [class.if]="item.type === 'if'">
         <div class="output-port" *ngFor="let o of item.outputs; let idx = index" [attr.data-index]="idx">
             <div *ngIf="o.name" class="output-port__name">{{ o.name }}</div>
         </div>

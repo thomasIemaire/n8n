@@ -9,29 +9,35 @@ import { NodeFactory } from './core/node.factory';
 export interface GFlowPort { name?: string; }
 export interface GFlowNode {
   id: string;
+  name: string;
   type: string;
   x: number;
   y: number;
   inputs: GFlowPort[];
   outputs: GFlowPort[];
+  configured?: boolean;
 }
 
 export class GFlowNodeModel implements GFlowNode {
   id: string = '';
+  name: string = '';
   type: string = '';
   x: number = 0;
   y: number = 0;
   inputs: GFlowPort[] = [];
   outputs: GFlowPort[] = [];
+  configured?: boolean;
 
   constructor(init?: Partial<GFlowNode>) {
     if (init) {
       this.id = init.id || Date.now().toString();
+      this.name = init.name || '';
       this.type = init.type || '';
       this.x = init.x ?? 0;
       this.y = init.y ?? 0;
       this.inputs = init.inputs || [];
       this.outputs = init.outputs || [];
+      this.configured = init.configured ?? undefined;
     }
   }
 }
@@ -49,10 +55,17 @@ interface PortRef { nodeId: string; portIndex: number; kind: PortKind; }
 interface PendingLink { from: PortRef; mouse: { x: number; y: number }; }
 
 /* ---------- Palette ---------- */
+type NodeType =
+  | 'start'
+  | 'end-success' | 'end-error'
+  | 'if' | 'merge' | 'edit'
+  | 'sardine'
+  | 'agent' | 'agent-group';
+
 interface PaletteItem {
-  type: 'start' | 'end' | 'agent' | 'if';
+  type: NodeType;
   label: string;
-  icon: string; // PrimeIcons class, ex: 'pi pi-play'
+  icon: string; // PrimeIcons class
 }
 interface PaletteGroup { name: string; items: PaletteItem[]; }
 
@@ -63,10 +76,7 @@ interface PaletteGroup { name: string; items: PaletteItem[]; }
   styleUrls: ['./gflow.scss']
 })
 export class Gflow implements AfterViewInit, OnDestroy {
-  constructor(private ngZone: NgZone, private cdr: ChangeDetectorRef) {
-    // exemple: un nœud de départ initial
-    this.nodes.push(NodeFactory.createNode('start', 0, 0));
-  }
+  constructor(private ngZone: NgZone, private cdr: ChangeDetectorRef) { }
 
   @ViewChild('viewport', { static: true }) viewport!: ElementRef<HTMLElement>;
 
@@ -165,6 +175,8 @@ export class Gflow implements AfterViewInit, OnDestroy {
   }
 
   // ----- util
+  private hasStart(): boolean { return this.nodes.some(n => n.type === 'start'); }
+
   private vpToWorld(ev: MouseEvent) {
     const rect = this.viewport.nativeElement.getBoundingClientRect();
     const vx = ev.clientX - rect.left;
@@ -187,26 +199,43 @@ export class Gflow implements AfterViewInit, OnDestroy {
     });
   }
   private recalcLinkPaths() {
+    const radius = this.baseStep * 0.75; // coins arrondis manhattan
+    const stub = this.baseStep * 2;    // petit “décollage” depuis les ports
+    const aheadThreshold = this.baseStep * 2; // marge pour dire “devant”
+
     for (const l of this.links) {
-      const p1 = this.portCenterWorld({ nodeId: l.src.nodeId, portIndex: l.src.portIndex, kind: 'out' });
-      const p2 = this.portCenterWorld({ nodeId: l.dst.nodeId, portIndex: l.dst.portIndex, kind: 'in' });
+      const srcRef: PortRef = { nodeId: l.src.nodeId, portIndex: l.src.portIndex, kind: 'out' };
+      const dstRef: PortRef = { nodeId: l.dst.nodeId, portIndex: l.dst.portIndex, kind: 'in' };
+      const p1 = this.portCenterWorld(srcRef);
+      const p2 = this.portCenterWorld(dstRef);
 
-      const dx = Math.max(40, Math.abs(p2.x - p1.x) * 0.5);
-      const c1 = { x: p1.x + dx, y: p1.y };
-      const c2 = { x: p2.x - dx, y: p2.y };
-
-      l.d = `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p2.x} ${p2.y}`;
-
-      const t = 0.5, u = 1 - t;
-      const midX = u * u * u * p1.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p2.x;
-      const midY = u * u * u * p1.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p2.y;
-      l.mid = { x: midX, y: midY };
+      const ahead = p2.x >= p1.x + aheadThreshold;
+      if (ahead) {
+        const route = this.routeSoft(p1, p2, 'E', 'W', stub);
+        l.d = route.d; l.mid = route.mid;
+      } else {
+        const route = this.routeManhattan(p1, p2, 'E', 'W', stub, radius);
+        l.d = route.d; l.mid = route.mid;
+      }
     }
 
     if (this.pendingLink) {
       const p1 = this.portCenterWorld(this.pendingLink.from);
       const p2 = this.pendingLink.mouse;
-      this.pendingPreviewD = this.cubic(p1.x, p1.y, p2.x, p2.y);
+
+      // sens de sortie/entrée selon le port d’origine
+      const dirA: 'E' | 'W' = this.pendingLink.from.kind === 'out' ? 'E' : 'W';
+      const dirB: 'E' | 'W' = this.pendingLink.from.kind === 'out' ? 'W' : 'E';
+
+      const ahead = dirA === 'E'
+        ? (p2.x >= p1.x + aheadThreshold)
+        : (p1.x >= p2.x + aheadThreshold);
+
+      const route = ahead
+        ? this.routeSoft(p1, p2, dirA, dirB, stub)
+        : this.routeManhattan(p1, p2, dirA, dirB, stub, radius);
+
+      this.pendingPreviewD = route.d;
     } else {
       this.pendingPreviewD = '';
     }
@@ -237,15 +266,6 @@ export class Gflow implements AfterViewInit, OnDestroy {
       this.oy += ev.movementY;
       this.scheduleUpdateWires();
     }
-  }
-
-  // ----- ajout nœud (dblclick -> 'if' pour l’exemple)
-  public onDblClick(ev: MouseEvent) {
-    const w = this.vpToWorld(ev);
-    const x0 = this.snapHalf(w.x - this.nodeSize / 2);
-    const y0 = this.snapHalf(w.y - this.nodeSize / 2);
-    this.nodes.push(NodeFactory.createNode('if', x0, y0));
-    this.scheduleUpdateWires();
   }
 
   // ----- drag & drop nœud
@@ -335,12 +355,110 @@ export class Gflow implements AfterViewInit, OnDestroy {
     const cy = pr.top + pr.height / 2 - vp.top;
     return { x: (cx - this.ox) / this.scale, y: (cy - this.oy) / this.scale };
   }
-  private cubic(x1: number, y1: number, x2: number, y2: number) {
-    const dx = Math.max(40, Math.abs(x2 - x1) * 0.5);
-    const c1x = x1 + dx, c1y = y1;
-    const c2x = x2 - dx, c2y = y2;
-    return `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${x2} ${y2}`;
+  /** Lien “souple” : cubic entre deux stubs + traits jusqu’aux ports. */
+  private routeSoft(
+    a: { x: number, y: number },
+    b: { x: number, y: number },
+    dirA: 'E' | 'W' | 'N' | 'S',
+    dirB: 'E' | 'W' | 'N' | 'S',
+    stub: number
+  ): { d: string, mid: { x: number, y: number } } {
+
+    const pA = this.offset(a, dirA, stub); // sortie du port A
+    const pB = this.offset(b, dirB, stub); // entrée côté B
+
+    // contrôles horizontaux principalement (style lacet)
+    const dx = Math.max(40, Math.abs(pB.x - pA.x) * 0.5);
+    const c1 = { x: pA.x + (dirA === 'E' ? dx : -dx), y: pA.y };
+    const c2 = { x: pB.x + (dirB === 'W' ? -dx : dx), y: pB.y };
+
+    const d = [
+      `M ${a.x} ${a.y}`,
+      `L ${pA.x} ${pA.y}`,
+      `C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${pB.x} ${pB.y}`,
+      `L ${b.x} ${b.y}`
+    ].join(' ');
+
+    // milieu approximatif = milieu de la courbe
+    const t = 0.5, u = 1 - t;
+    const midX =
+      u * u * u * pA.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * pB.x;
+    const midY =
+      u * u * u * pA.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * pB.y;
+
+    return { d, mid: { x: midX, y: midY } };
   }
+  /** Route Manhattan H/V avec coins arrondis. */
+  private routeManhattan(
+    a: { x: number, y: number },
+    b: { x: number, y: number },
+    dirA: 'E' | 'W' | 'N' | 'S',
+    dirB: 'E' | 'W' | 'N' | 'S',
+    stub: number,
+    radius: number
+  ): { d: string, mid: { x: number, y: number } } {
+
+    const pa = this.offset(a, dirA, stub);
+    const pb = this.offset(b, dirB, stub);
+
+    const pts: Array<{ x: number, y: number }> = [a, pa];
+
+    if (pb.x - pa.x >= stub) {
+      const mx = (pa.x + pb.x) / 2;
+      pts.push({ x: mx, y: pa.y }, { x: mx, y: pb.y });
+    } else {
+      const vgap = stub * 1.5 * (pb.y >= pa.y ? 1 : -1);
+      pts.push({ x: pa.x, y: pa.y + vgap }, { x: pb.x, y: pa.y + vgap });
+    }
+
+    pts.push(pb, b);
+
+    const d = this.roundedPath(pts, radius);
+    const mid = this.polylineMidpoint(pts);
+    return { d, mid };
+  }
+
+  private offset(p: { x: number, y: number }, dir: 'E' | 'W' | 'N' | 'S', d: number) {
+    switch (dir) {
+      case 'E': return { x: p.x + d, y: p.y };
+      case 'W': return { x: p.x - d, y: p.y };
+      case 'N': return { x: p.x, y: p.y - d };
+      case 'S': return { x: p.x, y: p.y + d };
+    }
+  }
+
+  private roundedPath(pts: Array<{ x: number, y: number }>, r: number): string {
+    if (pts.length < 2) return '';
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 1; i < pts.length; i++) {
+      const p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1];
+      if (!p2) { d += ` L ${p1.x} ${p1.y}`; break; }
+      const v1 = { x: p0.x - p1.x, y: p0.y - p1.y };
+      const v2 = { x: p2.x - p1.x, y: p2.y - p1.y };
+      const l1 = Math.hypot(v1.x, v1.y), l2 = Math.hypot(v2.x, v2.y);
+      if (!l1 || !l2) continue;
+      const rr = Math.min(r, l1 / 2, l2 / 2);
+      const pA = { x: p1.x + (v1.x / l1) * rr, y: p1.y + (v1.y / l1) * rr };
+      const pB = { x: p1.x + (v2.x / l2) * rr, y: p1.y + (v2.y / l2) * rr };
+      d += ` L ${pA.x} ${pA.y} Q ${p1.x} ${p1.y} ${pB.x} ${pB.y}`;
+    }
+    return d;
+  }
+
+  private polylineMidpoint(pts: Array<{ x: number, y: number }>): { x: number, y: number } {
+    let L = 0; const seg: number[] = [];
+    for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); seg.push(l); L += l; }
+    let t = L / 2;
+    for (let i = 1; i < pts.length; i++) {
+      if (t <= seg[i - 1]) {
+        const k = t / seg[i - 1], p0 = pts[i - 1], p1 = pts[i];
+        return { x: p0.x + (p1.x - p0.x) * k, y: p0.y + (p1.y - p0.y) * k };
+      }
+      t -= seg[i - 1];
+    }
+    return pts[Math.floor(pts.length / 2)] || pts[0];
+  }
+
   removeLink(link: GFlowLink) {
     this.links = this.links.filter(l => l.id !== link.id);
     if (this.hoveredLinkId === link.id) this.hoveredLinkId = null;
@@ -374,19 +492,24 @@ export class Gflow implements AfterViewInit, OnDestroy {
       name: 'Flux',
       items: [
         { type: 'start', label: 'Start', icon: 'pi pi-play' },
-        { type: 'end', label: 'End', icon: 'pi pi-flag' }
+        { type: 'end-success', label: 'Fin – Réussite', icon: 'pi pi-check-circle' },
+        { type: 'end-error', label: 'Fin – Erreur', icon: 'pi pi-times-circle' },
       ]
     },
     {
       name: 'Logique',
       items: [
-        { type: 'if', label: 'If', icon: 'pi pi-directions' }
+        { type: 'if', label: 'If', icon: 'pi pi-arrow-right-arrow-left' },
+        { type: 'merge', label: 'Merge', icon: 'pi pi-sitemap' },
+        { type: 'edit', label: 'Edit', icon: 'pi pi-pencil' },
       ]
     },
     {
       name: 'Agents',
       items: [
-        { type: 'agent', label: 'Agent', icon: 'pi pi-user' }
+        { type: 'sardine', label: 'Sardine', icon: 'pi pi-send' },
+        { type: 'agent', label: 'Agent', icon: 'pi pi-microchip-ai' },
+        { type: 'agent-group', label: 'Agent groupé', icon: 'pi pi-users' },
       ]
     }
   ];
@@ -410,6 +533,7 @@ export class Gflow implements AfterViewInit, OnDestroy {
     const x0 = this.snapHalf(wx - this.nodeSize / 2);
     const y0 = this.snapHalf(wy - this.nodeSize / 2);
 
+    if (it.type === 'start' && this.hasStart()) return;
     this.nodes.push(NodeFactory.createNode(it.type, x0, y0));
     this.scheduleUpdateWires();
   }
