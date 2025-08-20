@@ -407,7 +407,7 @@ export class Gflow implements AfterViewInit, OnDestroy {
       const mx = (pa.x + pb.x) / 2;
       pts.push({ x: mx, y: pa.y }, { x: mx, y: pb.y });
     } else {
-      const vgap = stub * 1.5 * (pb.y >= pa.y ? 1 : -1);
+      const vgap = stub * 2.5 * (pb.y >= pa.y ? 1 : -1);
       pts.push({ x: pa.x, y: pa.y + vgap }, { x: pb.x, y: pa.y + vgap });
     }
 
