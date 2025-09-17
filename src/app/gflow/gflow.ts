@@ -1,12 +1,17 @@
 import { CommonModule } from '@angular/common';
 import {
   Component, ElementRef, ViewChild,
-  NgZone, ChangeDetectorRef, AfterViewInit, OnDestroy
+  NgZone, ChangeDetectorRef, AfterViewInit, OnDestroy,
+  Type,
+  ViewContainerRef,
+  ComponentRef
 } from '@angular/core';
 import { Node } from './node/node';
 import { NodeFactory } from './core/node.factory';
+import { TabsModule } from 'primeng/tabs';
 
-export interface GFlowPort { name?: string; }
+export interface GFlowPort { name?: string; map?: JSON; }
+export interface GFlowConfig { }
 export interface GFlowNode {
   id: string;
   name: string;
@@ -15,7 +20,12 @@ export interface GFlowNode {
   y: number;
   inputs: GFlowPort[];
   outputs: GFlowPort[];
+  entries?: GFlowPort[];
+  exits?: GFlowPort[];
   configured?: boolean;
+  focused?: boolean;
+  config?: GFlowConfig;
+  configComponent?: Type<any>;
 }
 
 export class GFlowNodeModel implements GFlowNode {
@@ -26,7 +36,12 @@ export class GFlowNodeModel implements GFlowNode {
   y: number = 0;
   inputs: GFlowPort[] = [];
   outputs: GFlowPort[] = [];
+  entries: GFlowPort[] = [];
+  exits: GFlowPort[] = [];
   configured?: boolean;
+  focused?: boolean;
+  config?: GFlowConfig;
+  configComponent?: any;
 
   constructor(init?: Partial<GFlowNode>) {
     if (init) {
@@ -37,20 +52,30 @@ export class GFlowNodeModel implements GFlowNode {
       this.y = init.y ?? 0;
       this.inputs = init.inputs || [];
       this.outputs = init.outputs || [];
+      this.entries = init.entries || [];
+      this.exits = init.exits || [];
       this.configured = init.configured ?? undefined;
+      this.focused = init.focused ?? false;
+      this.config = init.config || {};
+      this.configComponent = init.configComponent || null;
     }
   }
 }
 
+export type JSONValue = string | number | boolean | null | JSONValue[] | { [k: string]: JSONValue };
+export type JSON = JSONValue;
+
 export interface GFlowLink {
   id: string;
-  src: { nodeId: string; portIndex: number; };
-  dst: { nodeId: string; portIndex: number; };
-  d?: string; // path mis en cache pour le template
+  src: PortRef;
+  dst: PortRef;
+  relation: 'io' | 'entry-exit';  // <— nouveau
+  d?: string;
   mid?: { x: number; y: number };
+  map?: JSON;
 }
 
-type PortKind = 'in' | 'out';
+type PortKind = 'in' | 'out' | 'entry' | 'exit';
 interface PortRef { nodeId: string; portIndex: number; kind: PortKind; }
 interface PendingLink { from: PortRef; mouse: { x: number; y: number }; }
 
@@ -71,7 +96,7 @@ interface PaletteGroup { name: string; items: PaletteItem[]; }
 
 @Component({
   selector: 'app-gflow', standalone: true,
-  imports: [CommonModule, Node],
+  imports: [CommonModule, Node, TabsModule],
   templateUrl: './gflow.html',
   styleUrls: ['./gflow.scss']
 })
@@ -93,9 +118,43 @@ export class Gflow implements AfterViewInit, OnDestroy {
   private nextLinkId = 1;
   public get nodeSize(): number { return 4 * this.baseStep; }
 
+  /** NOM lisible pour un node */
+  nodeName(id: string) {
+    return this.nodes.find(n => n.id === id)?.name || id;
+  }
+
+  /** Tous les liens entrants (relation io) vers l'input #idx du focusedNode */
+  inputLinksFor(idx: number): GFlowLink[] {
+    if (!this.focusedNode) return [];
+    return this.links.filter(l =>
+      l.relation === 'io' &&
+      l.dst.nodeId === this.focusedNode!.id &&
+      l.dst.kind === 'in' &&
+      l.dst.portIndex === idx
+    );
+  }
+
+  /** Tous les liens sortants (relation io) depuis l'output #idx du focusedNode */
+  outputLinksFor(idx: number): GFlowLink[] {
+    if (!this.focusedNode) return [];
+    return this.links.filter(l =>
+      l.relation === 'io' &&
+      l.src.nodeId === this.focusedNode!.id &&
+      l.src.kind === 'out' &&
+      l.src.portIndex === idx
+    );
+  }
+
+  /** trackBy pour *ngFor sur les liens */
+  trackByLinkId(_i: number, l: GFlowLink) { return l.id; }
+
   // aperçu du lien en cours
   public pendingLink: PendingLink | null = null;
   public pendingPreviewD = '';
+
+  // ===== Drag group (entries => children suivent) =====
+  private dragMainStart = { x: 0, y: 0 };
+  private dragGroup: Array<{ node: GFlowNode; x0: number; y0: number }> = [];
 
   // ----- Toolbar lien (anti-clignotement)
   public hoveredLinkId: string | null = null;
@@ -129,6 +188,31 @@ export class Gflow implements AfterViewInit, OnDestroy {
       }
       this.hideToolbarTimer = null;
     }, 150);
+  }
+
+  public focusedNode: GFlowNode | null = null;
+  focusNode(n: GFlowNode | null) {
+    this.focusedNode = n;
+    this.nodes.forEach(nn => nn.focused = (nn.id === n?.id));
+    this.cdr.markForCheck();
+    this.loadConfigComponent();
+  }
+
+  centerNode(n: GFlowNode) {
+    this.focusNode(n);
+    const rect = this.viewport.nativeElement.getBoundingClientRect();
+    const vx = rect.width / 2;
+    const vy = rect.height / 2;
+    const wx = n.x + this.realNodeSize(n) / 2;
+    const wy = n.y + this.realNodeSize(n) / 2;
+    this.ox = vx - wx * this.scale;
+    this.oy = vy - wy * this.scale;
+    this.openConfig();
+    this.scheduleUpdateWires();
+  }
+
+  realNodeSize(n: GFlowNode) {
+    return this.nodeSize * Math.max(n.entries!.length, 1);
   }
 
   // ----- Toolbar nœud (anti-clignotement)
@@ -199,43 +283,52 @@ export class Gflow implements AfterViewInit, OnDestroy {
     });
   }
   private recalcLinkPaths() {
-    const radius = this.baseStep * 0.75; // coins arrondis manhattan
-    const stub = this.baseStep * 2;    // petit “décollage” depuis les ports
-    const aheadThreshold = this.baseStep * 2; // marge pour dire “devant”
+    const radius = this.baseStep * 0.75;
+    const stub = this.baseStep;
+    const aheadThreshold = this.baseStep * 4;
 
     for (const l of this.links) {
-      const srcRef: PortRef = { nodeId: l.src.nodeId, portIndex: l.src.portIndex, kind: 'out' };
-      const dstRef: PortRef = { nodeId: l.dst.nodeId, portIndex: l.dst.portIndex, kind: 'in' };
-      const p1 = this.portCenterWorld(srcRef);
-      const p2 = this.portCenterWorld(dstRef);
+      const p1 = this.portCenterWorld(l.src);
+      const p2 = this.portCenterWorld(l.dst);
 
-      const ahead = p2.x >= p1.x + aheadThreshold;
-      if (ahead) {
-        const route = this.routeSoft(p1, p2, 'E', 'W', stub);
+      if (l.relation === 'entry-exit') {
+        // Trajet “souple” vertical (S→N)
+        const route = this.routeManhattan(p1, p2, 'S', 'N', stub, radius);
         l.d = route.d; l.mid = route.mid;
       } else {
-        const route = this.routeManhattan(p1, p2, 'E', 'W', stub, radius);
-        l.d = route.d; l.mid = route.mid;
+        // cas io (out→in) inchangé
+        const ahead = p2.x >= p1.x + aheadThreshold;
+        if (ahead) {
+          const route = this.routeSoft(p1, p2, 'E', 'W', stub);
+          l.d = route.d; l.mid = route.mid;
+        } else {
+          const route = this.routeManhattan(p1, p2, 'E', 'W', stub, radius);
+          l.d = route.d; l.mid = route.mid;
+        }
       }
     }
 
+    // aperçu pendant le drag
     if (this.pendingLink) {
       const p1 = this.portCenterWorld(this.pendingLink.from);
       const p2 = this.pendingLink.mouse;
 
-      // sens de sortie/entrée selon le port d’origine
-      const dirA: 'E' | 'W' = this.pendingLink.from.kind === 'out' ? 'E' : 'W';
-      const dirB: 'E' | 'W' = this.pendingLink.from.kind === 'out' ? 'W' : 'E';
-
-      const ahead = dirA === 'E'
-        ? (p2.x >= p1.x + aheadThreshold)
-        : (p1.x >= p2.x + aheadThreshold);
-
-      const route = ahead
-        ? this.routeSoft(p1, p2, dirA, dirB, stub)
-        : this.routeManhattan(p1, p2, dirA, dirB, stub, radius);
-
-      this.pendingPreviewD = route.d;
+      if (this.pendingLink.from.kind === 'entry' || this.pendingLink.from.kind === 'exit') {
+        const route = this.routeSoft(
+          p1, p2,
+          this.pendingLink.from.kind === 'entry' ? 'S' : 'N',
+          this.pendingLink.from.kind === 'entry' ? 'N' : 'S',
+          stub
+        );
+        this.pendingPreviewD = route.d;
+      } else {
+        const dirA: 'E' | 'W' = this.pendingLink.from.kind === 'out' ? 'E' : 'W';
+        const dirB: 'E' | 'W' = this.pendingLink.from.kind === 'out' ? 'W' : 'E';
+        const ahead = dirA === 'E' ? (p2.x >= p1.x + aheadThreshold) : (p1.x >= p2.x + aheadThreshold);
+        const route = ahead ? this.routeSoft(p1, p2, dirA, dirB, stub)
+          : this.routeManhattan(p1, p2, dirA, dirB, stub, radius);
+        this.pendingPreviewD = route.d;
+      }
     } else {
       this.pendingPreviewD = '';
     }
@@ -272,19 +365,66 @@ export class Gflow implements AfterViewInit, OnDestroy {
   public draggingNode: GFlowNode | null = null;
   private dragDX = 0; private dragDY = 0;
   public startDrag(ev: MouseEvent, n: GFlowNode) {
-    if ((ev.target as HTMLElement)?.closest('.input-port, .output-port')) return;
+    // ne pas démarrer un drag si on clique un port
+    if ((ev.target as HTMLElement)?.closest('.input-port, .output-port, .entry-port, .exit-port')) return;
+
     ev.preventDefault(); ev.stopPropagation();
     const w = this.vpToWorld(ev);
+
     this.draggingNode = n;
-    this.dragDX = w.x - n.x; this.dragDY = w.y - n.y;
+    this.dragDX = w.x - n.x;
+    this.dragDY = w.y - n.y;
+
+    // mémoriser la position de départ du node principal
+    this.dragMainStart = { x: n.x, y: n.y };
+
+    // construire le groupe: si le node a des entries, on ajoute tous les nœuds reliés aux entries (entry→exit)
+    this.dragGroup = [];
+    if (n.entries && n.entries.length) {
+      const childIds = new Set<string>();
+
+      for (let entryIdx = 0; entryIdx < n.entries.length; entryIdx++) {
+        this.links.forEach(l => {
+          if (
+            l.relation === 'entry-exit' &&
+            l.src.nodeId === n.id && l.src.kind === 'entry' &&
+            l.src.portIndex === entryIdx &&
+            l.dst.kind === 'exit'
+          ) {
+            childIds.add(l.dst.nodeId);
+          }
+        });
+      }
+
+      childIds.forEach(id => {
+        const child = this.nodes.find(nn => nn.id === id);
+        if (child && child.id !== n.id) {
+          this.dragGroup.push({ node: child, x0: child.x, y0: child.y });
+        }
+      });
+    }
   }
   public onDocMouseMove(ev: MouseEvent) {
     if (this.draggingNode) {
       const w = this.vpToWorld(ev);
+
+      // position du node principal
       this.draggingNode.x = this.snapHalf(w.x - this.dragDX);
       this.draggingNode.y = this.snapHalf(w.y - this.dragDY);
+
+      // delta par rapport à son point de départ
+      const dx = this.draggingNode.x - this.dragMainStart.x;
+      const dy = this.draggingNode.y - this.dragMainStart.y;
+
+      // appliquer le delta aux enfants du groupe
+      for (const g of this.dragGroup) {
+        g.node.x = this.snapHalf(g.x0 + dx);
+        g.node.y = this.snapHalf(g.y0 + dy);
+      }
+
       this.scheduleUpdateWires();
     }
+
     if (this.pendingLink) {
       const w = this.vpToWorld(ev);
       this.pendingLink.mouse = w;
@@ -294,12 +434,20 @@ export class Gflow implements AfterViewInit, OnDestroy {
   public onDocMouseUp(_ev: MouseEvent) {
     this.finishLink(_ev);
     this.draggingNode = null;
+    this.dragGroup = [];
   }
+
+  onNodeConfigChange = (_evt: any) => {
+    if (!this.focusedNode) return;
+    // propage l’accumulation à partir du nœud dont l’output a changé
+    this.recomputeDownstreamFrom(this.focusedNode.id);
+    this.scheduleUpdateWires();
+  };
 
   // ================== LIENS ==================
   public onDocMouseDown(ev: MouseEvent) {
     const target = ev.target as HTMLElement;
-    const portEl = target?.closest('.input-port, .output-port') as HTMLElement | null;
+    const portEl = target?.closest('.input-port, .output-port, .entry-port, .exit-port') as HTMLElement | null;
     if (!portEl) return;
 
     ev.preventDefault(); ev.stopPropagation();
@@ -307,7 +455,12 @@ export class Gflow implements AfterViewInit, OnDestroy {
     const host = portEl.closest('[data-node-id]') as HTMLElement;
     const nodeId = host.getAttribute('data-node-id')!;
     const portIndex = Number(portEl.getAttribute('data-index') || 0);
-    const kind: PortKind = portEl.classList.contains('output-port') ? 'out' : 'in';
+
+    let kind: PortKind = 'in';
+    if (portEl.classList.contains('output-port')) kind = 'out';
+    else if (portEl.classList.contains('input-port')) kind = 'in';
+    else if (portEl.classList.contains('entry-port')) kind = 'entry';
+    else if (portEl.classList.contains('exit-port')) kind = 'exit';
 
     const w = this.vpToWorld(ev);
     this.pendingLink = { from: { nodeId, portIndex, kind }, mouse: w };
@@ -315,37 +468,79 @@ export class Gflow implements AfterViewInit, OnDestroy {
   }
   private finishLink(ev: MouseEvent) {
     if (!this.pendingLink) return;
-
     const target = ev.target as HTMLElement;
-    const portEl = target?.closest('.input-port, .output-port') as HTMLElement | null;
+    const portEl = target?.closest('.input-port, .output-port, .entry-port, .exit-port') as HTMLElement | null;
 
     if (portEl) {
       const host = portEl.closest('[data-node-id]') as HTMLElement;
       const nodeId = host.getAttribute('data-node-id')!;
       const portIndex = Number(portEl.getAttribute('data-index') || 0);
-      const kind: PortKind = portEl.classList.contains('output-port') ? 'out' : 'in';
+
+      let kind: PortKind = 'in';
+      if (portEl.classList.contains('output-port')) kind = 'out';
+      else if (portEl.classList.contains('input-port')) kind = 'in';
+      else if (portEl.classList.contains('entry-port')) kind = 'entry';
+      else if (portEl.classList.contains('exit-port')) kind = 'exit';
 
       const a = this.pendingLink.from;
       const b: PortRef = { nodeId, portIndex, kind };
 
-      let src: PortRef | null = null, dst: PortRef | null = null;
-      if (a.kind === 'out' && b.kind === 'in') { src = a; dst = b; }
-      else if (a.kind === 'in' && b.kind === 'out') { src = b; dst = a; }
+      let src: PortRef | null = null, dst: PortRef | null = null, relation: 'io' | 'entry-exit' | null = null;
 
-      if (src && dst && !(src.nodeId === dst.nodeId && src.portIndex === dst.portIndex)) {
+      if (a.kind === 'out' && b.kind === 'in') { src = a; dst = b; relation = 'io'; }
+      else if (a.kind === 'in' && b.kind === 'out') { src = b; dst = a; relation = 'io'; }
+      else if (a.kind === 'entry' && b.kind === 'exit') { src = a; dst = b; relation = 'entry-exit'; }
+      else if (a.kind === 'exit' && b.kind === 'entry') { src = b; dst = a; relation = 'entry-exit'; }
+
+      // optionnel : 1 seul lien par entry/exit
+      const isBusy = (r: PortRef) => this.links.some(l =>
+        l.relation === relation &&
+        ((l.src.nodeId === r.nodeId && l.src.kind === r.kind && l.src.portIndex === r.portIndex) ||
+          (l.dst.nodeId === r.nodeId && l.dst.kind === r.kind && l.dst.portIndex === r.portIndex)));
+
+      if (src && dst && relation &&
+        !(src.nodeId === dst.nodeId && src.portIndex === dst.portIndex) &&
+        !(relation === 'entry-exit' && (isBusy(src) || isBusy(dst)))) {
+
+        const mapJson =
+          (relation === 'io' && src.kind === 'out')
+            ? this.effectiveOutputMap(src.nodeId, src.portIndex)
+            : {};
+
         this.links.push({
           id: String(this.nextLinkId++),
-          src: { nodeId: src.nodeId, portIndex: src.portIndex },
-          dst: { nodeId: dst.nodeId, portIndex: dst.portIndex }
+          src, dst, relation,
+          map: mapJson
         });
       }
     }
+
     this.pendingLink = null;
     this.pendingPreviewD = '';
     this.scheduleUpdateWires();
   }
+
+  private defaultLinkMapJSON(src: PortRef, dst: PortRef): JSON {
+    const srcNode = this.nodes.find(n => n.id === src.nodeId);
+    const schema = (srcNode?.config as any)?.schema ?? {};
+
+    return {
+      sourceNodeId: src.nodeId,
+      srcPort: src.portIndex,
+      targetNodeId: dst.nodeId,
+      dstPort: dst.portIndex,
+      schema,
+      mapping: {}
+    };
+  }
+
   private portCenterWorld(ref: PortRef) {
-    const sel = `[data-node-id="${ref.nodeId}"] .${ref.kind === 'out' ? 'output' : 'input'}-port[data-index="${ref.portIndex}"]`;
+    const cls =
+      ref.kind === 'out' ? 'output' :
+        ref.kind === 'in' ? 'input' :
+          ref.kind === 'entry' ? 'entry' : 'exit';
+
+    const sel = `[data-node-id="${ref.nodeId}"] .${cls}-port[data-index="${ref.portIndex}"]`;
     const el = this.viewport.nativeElement.querySelector(sel) as HTMLElement | null;
     if (!el) return { x: 0, y: 0 };
 
@@ -462,24 +657,130 @@ export class Gflow implements AfterViewInit, OnDestroy {
   removeLink(link: GFlowLink) {
     this.links = this.links.filter(l => l.id !== link.id);
     if (this.hoveredLinkId === link.id) this.hoveredLinkId = null;
+    if (link.relation === 'io') this.recomputeDownstreamFrom(link.dst.nodeId);
     this.scheduleUpdateWires();
   }
+
   splitLink(link: GFlowLink) {
     if (!link.mid) return;
+
+    // (optionnel) ne pas découper les liens entry→exit
+    if (link.relation && link.relation !== 'io') {
+      return;
+    }
+
     const x0 = this.snapHalf(link.mid.x - this.nodeSize / 2);
     const y0 = this.snapHalf(link.mid.y - this.nodeSize / 2);
 
     const newNode = NodeFactory.createNode('agent', x0, y0);
     this.nodes.push(newNode);
 
+    // Retire l'ancien lien
     this.links = this.links.filter(l => l.id !== link.id);
-    this.links.push(
-      { id: String(this.nextLinkId++), src: { nodeId: link.src.nodeId, portIndex: link.src.portIndex }, dst: { nodeId: newNode.id, portIndex: 0 } },
-      { id: String(this.nextLinkId++), src: { nodeId: newNode.id, portIndex: 0 }, dst: { nodeId: link.dst.nodeId, portIndex: link.dst.portIndex } }
-    );
+
+    // amont (conserve map existante)
+    this.links.push({
+      id: String(this.nextLinkId++),
+      src: { ...link.src },
+      dst: { nodeId: newNode.id, portIndex: 0, kind: 'in' },
+      relation: 'io',
+      map: this.deepClone(link.map ?? {})
+    });
+
+    // aval (accumulation du nouveau nœud)
+    this.links.push({
+      id: String(this.nextLinkId++),
+      src: { nodeId: newNode.id, portIndex: 0, kind: 'out' },
+      dst: { ...link.dst },
+      relation: 'io',
+      map: this.effectiveOutputMap(newNode.id, 0)
+    });
 
     this.hoveredLinkId = null;
     this.scheduleUpdateWires();
+  }
+
+  private deepClone<T>(v: T): T {
+    return JSON.parse(JSON.stringify(v));
+  }
+  private isPlainObject(v: any): v is Record<string, any> {
+    return v && typeof v === 'object' && !Array.isArray(v);
+  }
+  private mergeJSON(a: JSON, b: JSON): JSON {
+    if (this.isPlainObject(a) && this.isPlainObject(b)) {
+      const out: any = { ...a };
+      for (const k of Object.keys(b)) {
+        out[k] = k in out ? this.mergeJSON((a as any)[k], (b as any)[k]) : this.deepClone((b as any)[k]);
+      }
+      return out;
+    }
+    // pour les scalaires/tableaux, on remplace par b
+    return this.deepClone(b);
+  }
+
+  /** Fusionne toutes les maps des liens io entrants vers ce nœud */
+  private aggregateIncomingMap(nodeId: string): JSON {
+    const ins = this.links.filter(l => l.relation === 'io' && l.dst.nodeId === nodeId && l.dst.kind === 'in');
+    let acc: JSON = {};
+    for (const l of ins) acc = this.mergeJSON(acc, l.map ?? {});
+    return acc;
+  }
+
+  /** JSON déclaré sur l'output du nœud (ex: outputs[i].map) */
+  private nodeOutputOwnMap(nodeId: string, outIdx: number): JSON {
+    const n = this.nodes.find(nn => nn.id === nodeId);
+    return this.deepClone(n?.outputs?.[outIdx]?.map ?? {});
+  }
+
+  /** Map effective d'un output = entrées accumulées + apport de l'output */
+  private effectiveOutputMap(nodeId: string, outIdx: number): JSON {
+    const incoming = this.aggregateIncomingMap(nodeId);
+    const own = this.nodeOutputOwnMap(nodeId, outIdx);
+    return this.mergeJSON(incoming, own);
+  }
+
+  /** Recalcule toutes les maps des liens sortants à partir d'un nœud, puis propage */
+  private recomputeDownstreamFrom(nodeId: string) {
+    const q: string[] = [nodeId];
+    const seen = new Set<string>();
+    while (q.length) {
+      const id = q.shift()!;
+      // tous les liens io sortants
+      const outs = this.links.filter(l => l.relation === 'io' && l.src.nodeId === id && l.src.kind === 'out');
+      for (const l of outs) {
+        const newMap = this.effectiveOutputMap(l.src.nodeId, l.src.portIndex);
+        l.map = newMap;
+        const dstId = l.dst.nodeId;
+        if (!seen.has(dstId)) { seen.add(dstId); q.push(dstId); }
+      }
+    }
+  }
+
+  @ViewChild('configHost', { read: ViewContainerRef }) configHost!: ViewContainerRef;
+  private configCmpRef: ComponentRef<any> | null = null;
+
+  private loadConfigComponent() {
+    if (!this.configHost) return;
+    this.configHost.clear();
+    this.configCmpRef?.destroy();
+    this.configCmpRef = null;
+
+    const n = this.focusedNode;
+    if (!n?.configComponent) return;
+
+    this.configCmpRef = this.configHost.createComponent(n.configComponent);
+    this.configCmpRef.setInput('node', n);
+
+    // écouter l’Output émis par le panneau de config
+    const inst: any = this.configCmpRef.instance;
+    if (inst?.configChange?.subscribe) {
+      inst.configChange.subscribe((_evt: any) => {
+        // => l’agent a changé de map : recalcul des maps accumulées
+        this.recomputeDownstreamFrom(n.id);
+        this.scheduleUpdateWires();
+        this.cdr.markForCheck();
+      });
+    }
   }
 
   /* ==================== PALETTE (bouton +) ==================== */
@@ -535,6 +836,7 @@ export class Gflow implements AfterViewInit, OnDestroy {
 
     if (it.type === 'start' && this.hasStart()) return;
     this.nodes.push(NodeFactory.createNode(it.type, x0, y0));
+    this.centerNode(this.nodes[this.nodes.length - 1]);
     this.scheduleUpdateWires();
   }
 
@@ -556,7 +858,38 @@ export class Gflow implements AfterViewInit, OnDestroy {
     const w = this.vpToWorld(ev as any as MouseEvent);
     const x0 = this.snapHalf(w.x - this.nodeSize / 2);
     const y0 = this.snapHalf(w.y - this.nodeSize / 2);
-    this.nodes.push(NodeFactory.createNode(it.type, x0, y0));
+    let node = NodeFactory.createNode(it.type, x0, y0);
+    this.nodes.push(node);
+    this.focusNode(node);
+    this.openConfig();
     this.scheduleUpdateWires();
   }
+
+  /* ==================== CONFIGURATION (bouton +) ==================== */
+  public configOpen = false;
+
+  openConfig() {
+    this.configOpen = true;
+    this.loadConfigComponent();
+  }
+
+  closeConfig() {
+    this.configOpen = false;
+    this.focusNode(null);
+  }
+
+  private nodeUsesExit(n: GFlowNode): boolean {
+    return this.links.some(l =>
+      (l.src.nodeId === n.id && l.src.kind === 'exit') ||
+      (l.dst.nodeId === n.id && l.dst.kind === 'exit'));
+  }
+
+  private nodeUsesIO(n: GFlowNode): boolean {
+    return this.links.some(l =>
+    ((l.src.nodeId === n.id && (l.src.kind === 'out' || l.src.kind === 'in')) ||
+      (l.dst.nodeId === n.id && (l.dst.kind === 'out' || l.dst.kind === 'in'))));
+  }
+
+  public exitHidden(n: GFlowNode) { return n.type === 'agent' && this.nodeUsesIO(n); }
+  public ioHidden(n: GFlowNode) { return n.type === 'agent' && this.nodeUsesExit(n); }
 }

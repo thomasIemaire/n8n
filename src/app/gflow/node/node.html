@@ -1,8 +1,8 @@
-<div class="node__container">
+<div class="node__container" [style.width.px]="width">
 
     <div class="node__wrapper" [class.start]="!item.inputs.length" [class.end]="!item.outputs.length"
         [class.unconfigurable]="item.configured === undefined" [class.unconfigured]="!item.configured"
-        [class.if]="item.type === 'if'" [class.agent]="item.type === 'agent'">
+        [class.focused]="item.focused" [class.if]="item.type === 'if'" [class.agent]="item.type === 'agent'">
         @switch (item.type) {
         @case ('start') { <span class="pi pi-caret-right"></span> }
         @case ('end-success') { <span class="pi pi-check-circle"></span> }
@@ -33,6 +33,18 @@
     <div class="node-outputs__wrapper" [class.if]="item.type === 'if'">
         <div class="output-port" *ngFor="let o of item.outputs; let idx = index" [attr.data-index]="idx">
             <div *ngIf="o.name" class="output-port__name">{{ o.name }}</div>
+        </div>
+    </div>
+
+    <div class="node-entries__wrapper" *ngIf="item.entries && item.entries.length">
+        <div class="entry-port" *ngFor="let e of item.entries; let idx = index" [attr.data-index]="idx">
+            <div *ngIf="e.name" class="entry-port__name">{{ e.name }}</div>
+        </div>
+    </div>
+
+    <div class="node-exits__wrapper" *ngIf="item.exits && item.exits.length">
+        <div class="exit-port" *ngFor="let e of item.exits; let idx = index" [attr.data-index]="idx">
+            <div *ngIf="e.name" class="exit-port__name">{{ e.name }}</div>
         </div>
     </div>
 </div>

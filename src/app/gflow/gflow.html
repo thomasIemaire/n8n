@@ -13,11 +13,166 @@
         </div>
     </div>
 
-    <div #viewport class="viewport__container" (wheel)="onWheel($event)" (mousemove)="onMouseMove($event)"
-        (document:mousedown)="onDocMouseDown($event)" (document:mousemove)="onDocMouseMove($event)"
-        (document:mouseup)="onDocMouseUp($event)">
+    <!-- Palette de nœuds (dock gauche par défaut) -->
+    <div class="ide">
+        <div class="ide__content">
+            <div #viewport class="viewport__container" (wheel)="onWheel($event)" (mousemove)="onMouseMove($event)"
+                (document:mousedown)="onDocMouseDown($event)" (document:mousemove)="onDocMouseMove($event)"
+                (document:mouseup)="onDocMouseUp($event)" (dragover)="onWorldDragOver($event)"
+                (drop)="onWorldDrop($event)">
+                <div class="canvas">
+                    <svg class="dot__background" preserveAspectRatio="none">
+                        <defs>
+                            <pattern id="dots" patternUnits="userSpaceOnUse" [attr.width]="baseStep"
+                                [attr.height]="baseStep"
+                                [attr.patternTransform]="'translate(' + ox + ',' + oy + ') scale(' + scale + ')'">
+                                <circle [attr.cx]="baseStep/2" [attr.cy]="baseStep/2" [attr.r]="dotR"
+                                    [attr.fill]="'var(--background-color-300)'"></circle>
+                            </pattern>
+                        </defs>
 
-        <!-- Palette de nœuds (dock gauche par défaut) -->
+                        <rect x="0" y="0" width="100%" height="100%" [attr.fill]="'var(--background-color-100)'"></rect>
+                        <rect x="0" y="0" width="100%" height="100%" fill="url(#dots)"></rect>
+                    </svg>
+
+                    <div class="world" [style.transform]="'translate(' + ox + 'px,' + oy + 'px) scale(' + scale + ')'"
+                        style="transform-origin: 0 0;">
+
+                        <svg class="wires">
+                            <defs>
+                                <marker id="arrow" viewBox="0 0 12 12" markerWidth="6" markerHeight="6" refX="10"
+                                    refY="6" orient="auto" markerUnits="strokeWidth">
+                                    <path class="arrow" d="M1,2.5 Q1,1.2 2.2,1.2 L10,6 L2.2,10.8 Q1,10.8 1,9.5 Z" />
+                                </marker>
+                            </defs>
+
+                            <g *ngFor="let l of links">
+                                <path class="wire" [class.wire--dashed]="l.relation==='entry-exit'" [attr.d]="l.d"
+                                    marker-end="url(#arrow)"></path>
+                                <path class="wire-hit" [attr.d]="l.d" (mouseenter)="enterLink(l)"
+                                    (mouseleave)="leaveLink()">
+                                </path>
+                            </g>
+
+                            <path class="wire wire--preview"
+                                [class.wire--dashed]="pendingLink?.from?.kind==='entry' || pendingLink?.from?.kind==='exit'"
+                                *ngIf="pendingLink" [attr.d]="pendingPreviewD" marker-end="url(#arrow)"></path>
+                        </svg>
+
+                        <div class="link-toolbar" *ngIf="hoveredLink && hoveredLink.mid"
+                            [style.left.px]="hoveredLink.mid!.x" [style.top.px]="hoveredLink.mid!.y"
+                            (mousedown)="$event.stopPropagation()" (click)="$event.stopPropagation()"
+                            (mouseenter)="enterToolbar()" (mouseleave)="leaveToolbar()">
+                            <button class="link-btn" title="Insérer un nœud" (click)="splitLink(hoveredLink!)">
+                                <i class="pi pi-plus"></i>
+                            </button>
+                            <button class="link-btn" title="Supprimer le lien" (click)="removeLink(hoveredLink!)">
+                                <i class="pi pi-trash"></i>
+                            </button>
+                        </div>
+
+                        <app-node class="node" *ngFor="let n of nodes" [attr.data-node-id]="n.id" [style.left.px]="n.x"
+                            [style.top.px]="n.y" [style.width.px]="realNodeSize(n)" [style.height.px]="nodeSize"
+                            [style.zIndex]="n.focused ? 10 : 1" (mousedown)="startDrag($event, n)"
+                            (mouseenter)="enterNode(n)" (mouseleave)="leaveNode()"
+                            [class.is-dragging]="draggingNode?.id === n.id" [class.io-hidden]="ioHidden(n)"
+                            [class.exit-hidden]="exitHidden(n)" [item]="n" (click)="focusNode(n)"
+                            (dblclick)="centerNode(n)">
+                        </app-node>
+
+                        <!-- TOOLBAR NŒUD -->
+                        <div class="node-toolbar" *ngIf="hoveredNode"
+                            [style.left.px]="hoveredNode!.x + realNodeSize(hoveredNode!) / 2"
+                            [style.top.px]="hoveredNode!.y" (mousedown)="$event.stopPropagation()"
+                            (click)="$event.stopPropagation()" (mouseenter)="enterNodeToolbar()"
+                            (mouseleave)="leaveNodeToolbar()">
+
+                            <!-- autres actions possibles ici (play, power, menu...) -->
+                            <button class="nt-btn" title="Supprimer le nœud" (click)="deleteNode(hoveredNode!)">
+                                <i class="pi pi-trash"></i>
+                            </button>
+                            <button class="nt-btn" title="Paramétrer le nœud" (click)="focusNode(hoveredNode!)">
+                                <i class="pi pi-cog"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="configuration__container" [class.open]="configOpen">
+                <div class="configuration__wrapper">
+                    <div class="inputs__wrapper">
+                        <p-tabs [value]="0" *ngIf="focusedNode?.inputs?.length">
+                            <p-tablist>
+                                <p-tab [value]="i" *ngFor="let e of focusedNode?.inputs; let i = index">
+                                    {{ e.name || 'input' }}
+                                </p-tab>
+                            </p-tablist>
+                            <p-tabpanels>
+                                <p-tabpanel [value]="i" *ngFor="let e of focusedNode?.inputs; let i = index">
+                                    <ng-container *ngIf="inputLinksFor(i) as inLinks">
+                                        <ng-container *ngIf="inLinks.length; else noInput">
+                                            <div class="map-list">
+                                                <div class="map-card"
+                                                    *ngFor="let lk of inLinks; trackBy: trackByLinkId">
+                                                    <div class="map-card__meta">
+                                                        De <strong>{{ nodeName(lk.src.nodeId) }}</strong> (output {{
+                                                        lk.src.portIndex }})
+                                                    </div>
+                                                    <pre class="map-card__json">{{ lk.map | json }}</pre>
+                                                </div>
+                                            </div>
+                                        </ng-container>
+                                    </ng-container>
+                                    <ng-template #noInput>
+                                        <em>Aucun lien entrant pour cet input.</em>
+                                    </ng-template>
+                                </p-tabpanel>
+                            </p-tabpanels>
+                        </p-tabs>
+                    </div>
+                    <div class="config__wrapper">
+                        <ng-container *ngIf="focusedNode as n">
+                            <ng-container *ngIf="n.configComponent as Cmp; else noCfg">
+                                <ng-template #configHost></ng-template>
+                            </ng-container>
+                            <ng-template #noCfg>
+                                <em>Aucun panneau de configuration pour ce nœud.</em>
+                            </ng-template>
+                        </ng-container>
+                    </div>
+                    <div class="outputs__wrapper">
+                        <p-tabs [value]="0" *ngIf="focusedNode?.outputs?.length">
+                            <p-tablist>
+                                <p-tab [value]="i" *ngFor="let o of focusedNode?.outputs; let i = index">
+                                    {{ o.name || 'output' }}
+                                </p-tab>
+                            </p-tablist>
+                            <p-tabpanels>
+                                <p-tabpanel [value]="i" *ngFor="let o of focusedNode?.outputs; let i = index">
+                                    <ng-container *ngIf="outputLinksFor(i) as outLinks">
+                                        <ng-container *ngIf="outLinks.length; else noOutput">
+                                            <div class="map-list">
+                                                <div class="map-card"
+                                                    *ngFor="let lk of outLinks; trackBy: trackByLinkId">
+                                                    <div class="map-card__meta">
+                                                        Vers <strong>{{ nodeName(lk.dst.nodeId) }}</strong> (input {{
+                                                        lk.dst.portIndex }})
+                                                    </div>
+                                                    <pre class="map-card__json">{{ lk.map | json }}</pre>
+                                                </div>
+                                            </div>
+                                        </ng-container>
+                                    </ng-container>
+                                    <ng-template #noOutput>
+                                        <em>Aucun lien sortant pour cet output.</em>
+                                    </ng-template>
+                                </p-tabpanel>
+                            </p-tabpanels>
+                        </p-tabs>
+                    </div>
+                </div>
+            </div>
+        </div>
         <aside class="palette" [class.open]="paletteOpen" [class.right]="paletteSide==='right'"
             (mousedown)="$event.stopPropagation()">
             <header class="palette__header">
@@ -38,76 +193,5 @@
                 </section>
             </div>
         </aside>
-
-
-        <div class="canvas">
-
-            <svg class="dot__background" preserveAspectRatio="none">
-                <defs>
-                    <pattern id="dots" patternUnits="userSpaceOnUse" [attr.width]="baseStep" [attr.height]="baseStep"
-                        [attr.patternTransform]="'translate(' + ox + ',' + oy + ') scale(' + scale + ')'">
-                        <circle [attr.cx]="baseStep/2" [attr.cy]="baseStep/2" [attr.r]="dotR"
-                            [attr.fill]="'var(--background-color-300)'"></circle>
-                    </pattern>
-                </defs>
-
-                <rect x="0" y="0" width="100%" height="100%" [attr.fill]="'var(--background-color-100)'"></rect>
-                <rect x="0" y="0" width="100%" height="100%" fill="url(#dots)"></rect>
-            </svg>
-
-            <div class="world" [style.transform]="'translate(' + ox + 'px,' + oy + 'px) scale(' + scale + ')'"
-                style="transform-origin: 0 0;" (dragover)="onWorldDragOver($event)" (drop)="onWorldDrop($event)">
-
-                <svg class="wires">
-                    <defs>
-                        <marker id="arrow" viewBox="0 0 12 12" markerWidth="6" markerHeight="6" refX="10" refY="6" orient="auto"
-                            markerUnits="strokeWidth">
-                            <path class="arrow" d="M1,2.5 Q1,1.2 2.2,1.2 L10,6 L2.2,10.8 Q1,10.8 1,9.5 Z" />
-                        </marker>
-                    </defs>
-
-                    <g *ngFor="let l of links">
-                        <path class="wire" [attr.d]="l.d" marker-end="url(#arrow)"></path>
-                        <path class="wire-hit" [attr.d]="l.d" (mouseenter)="enterLink(l)" (mouseleave)="leaveLink()">
-                        </path>
-                    </g>
-
-                    <path class="wire wire--preview" *ngIf="pendingLink" [attr.d]="pendingPreviewD"
-                        marker-end="url(#arrow)"></path>
-                </svg>
-
-                <div class="link-toolbar" *ngIf="hoveredLink && hoveredLink.mid" [style.left.px]="hoveredLink.mid!.x"
-                    [style.top.px]="hoveredLink.mid!.y" (mousedown)="$event.stopPropagation()"
-                    (click)="$event.stopPropagation()" (mouseenter)="enterToolbar()" (mouseleave)="leaveToolbar()">
-                    <button class="link-btn" title="Insérer un nœud" (click)="splitLink(hoveredLink!)">
-                        <i class="pi pi-plus"></i>
-                    </button>
-                    <button class="link-btn" title="Supprimer le lien" (click)="removeLink(hoveredLink!)">
-                        <i class="pi pi-trash"></i>
-                    </button>
-                </div>
-
-                <app-node class="node" *ngFor="let n of nodes" [attr.data-node-id]="n.id" [style.left.px]="n.x"
-                    [style.top.px]="n.y" [style.width.px]="nodeSize" [style.height.px]="nodeSize"
-                    (mousedown)="startDrag($event, n)" (mouseenter)="enterNode(n)" (mouseleave)="leaveNode()"
-                    [class.is-dragging]="draggingNode?.id === n.id" [item]="n">
-                </app-node>
-
-                <!-- TOOLBAR NŒUD -->
-                <div class="node-toolbar" *ngIf="hoveredNode" [style.left.px]="hoveredNode!.x + nodeSize/2"
-                    [style.top.px]="hoveredNode!.y" (mousedown)="$event.stopPropagation()"
-                    (click)="$event.stopPropagation()" (mouseenter)="enterNodeToolbar()"
-                    (mouseleave)="leaveNodeToolbar()">
-
-                    <!-- autres actions possibles ici (play, power, menu...) -->
-                    <button class="nt-btn" title="Supprimer le nœud" (click)="deleteNode(hoveredNode!)">
-                        <i class="pi pi-trash"></i>
-                    </button>
-                    <button class="nt-btn" title="Paramétrer le nœud">
-                        <i class="pi pi-cog"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
     </div>
 </div>

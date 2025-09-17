@@ -1,3 +1,4 @@
+import { ConfigAgent } from "../configs/config-agent/config-agent";
 import { GFlowNode, GFlowNodeModel } from "../gflow";
 
 export class NodeFactory {
@@ -25,6 +26,7 @@ export class NodeFactory {
                     type, x, y,
                     inputs: [{}],
                     outputs: [],
+                    config: { message: 'Le traitement n\'a pas abouti' },
                 });
 
             case 'if':
@@ -34,6 +36,7 @@ export class NodeFactory {
                     inputs: [{}],
                     outputs: [{ name: 'true' }, { name: 'false' }],
                     configured: false,
+                    config: [{ left: '', operator: '==', right: '' }],
                 });
 
             case 'merge':
@@ -52,6 +55,7 @@ export class NodeFactory {
                     inputs: [{}],
                     outputs: [{}],
                     configured: false,
+                    config: [{ field: '', value: '' }],
                 });
 
             case 'sardine':
@@ -59,8 +63,12 @@ export class NodeFactory {
                     name: 'Sardine',
                     type, x, y,
                     inputs: [{}],
-                    outputs: [{}, {}],
+                    outputs: [
+                        { name: 'valide', map: { sardine: { status: "success", type: "SARDINE_FILE_TYPE" } } },
+                        { name: 'invalide', map: { sardine: { status: "error", type: "SARDINE_FILE_TYPE" } } },
+                    ],
                     configured: false,
+                    config: []
                 });
 
             case 'agent':
@@ -69,7 +77,10 @@ export class NodeFactory {
                     type, x, y,
                     inputs: [{}],
                     outputs: [{}],
+                    exits: [{}],
                     configured: false,
+                    config: { id: '' },
+                    configComponent: ConfigAgent
                 });
 
             case 'agent-group':
@@ -78,7 +89,9 @@ export class NodeFactory {
                     type, x, y,
                     inputs: [{}],
                     outputs: [{}],
+                    entries: [{}, {}],
                     configured: false,
+                    config: { map: {}, ids: [] }
                 });
 
             default:

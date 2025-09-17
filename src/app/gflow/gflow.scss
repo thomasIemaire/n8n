@@ -43,6 +43,23 @@
             }
         }
     }
+
+    .ide {
+        width: 100%;
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+        position: relative;
+
+        .ide__content {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+    }
 }
 
 .viewport__container {
@@ -90,7 +107,7 @@
     display: flex;
     gap: 6px;
     padding: 4px;
-    background: #fff;
+    background: var(--background-color-50);
     border: 1px solid rgba(0, 0, 0, .1);
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
@@ -107,11 +124,11 @@
     border: none;
     border-radius: 6px;
     cursor: pointer;
-    background: #f2f4f7;
+    background: var(--background-color-200);
 }
 
 .nt-btn:hover {
-    background: #e6eaef;
+    background: var(--background-color-300);
 }
 
 .nt-btn i {
@@ -140,6 +157,10 @@
     pointer-events: none;
 }
 
+.wire--dashed {
+    stroke-dasharray: 6 6;
+}
+
 .wire--preview {
     stroke-dasharray: 6 6;
     opacity: .8;
@@ -148,8 +169,8 @@
 }
 
 .wires marker .arrow {
-    fill: var(--link-color, #8a98ad);
-    stroke: var(--link-color, #8a98ad);
+    fill: var(--link-color, var(--background-color-500));
+    stroke: var(--link-color, var(--background-color-500));
     stroke-width: 1.5;
     stroke-linejoin: round;
     stroke-linecap: round;
@@ -165,7 +186,7 @@
 }
 
 .wires marker path {
-    fill: var(--link-color, #8a98ad);
+    fill: var(--link-color, var(--background-color-500));
 }
 
 /* Toolbar */
@@ -176,7 +197,7 @@
     display: flex;
     gap: 6px;
     padding: 4px;
-    background: #fff;
+    background: var(--background-color-50);
     border: 1px solid rgba(0, 0, 0, .1);
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
@@ -191,12 +212,12 @@
     height: 24px;
     border: none;
     border-radius: 6px;
-    background: #f2f4f7;
+    background: var(--background-color-200);
     cursor: pointer;
 }
 
 .link-btn:hover {
-    background: #e6eaef;
+    background: var(--background-color-300);
 }
 
 .link-btn i {
@@ -223,7 +244,7 @@
     height: 36px;
     border: none;
     border-radius: 10px;
-    background: #ffffff;
+    background: var(--background-color-50);
     box-shadow: 0 2px 10px rgba(0, 0, 0, .12);
     display: grid;
     place-items: center;
@@ -237,38 +258,20 @@
 /* --- Palette : dock DROITE par défaut --- */
 .palette {
     --w: 280px;
-    position: absolute;
-    inset: 0 0 0 auto;
-    /* collé à DROITE */
-    width: var(--w);
-    transform: translateX(var(--w));
-    /* caché → glisse depuis la droite */
-    transition: transform 160ms ease;
-    background: #fff;
-    border-left: 1px solid #e5e7eb;
-    /* bord côté gauche du panneau */
+    width: 0px;
+    transition: width 160ms ease;
+    background: var(--background-color-50);
+    border-left: 1px solid var(--background-color-200);
     border-right: 0;
-    box-shadow: 0 2px 20px rgba(0, 0, 0, .06);
     z-index: 25;
     display: flex;
     flex-direction: column;
     pointer-events: auto;
-    z-index: 50;
-}
+    overflow: hidden;
 
-.palette.open {
-    transform: translateX(0);
-    /* panneau visible */
-}
-
-/* (Optionnel) Variante dock GAUCHE si besoin */
-.palette.left {
-    inset: 0 auto 0 0;
-    /* collé à GAUCHE */
-    border-left: 0;
-    border-right: 1px solid #e5e7eb;
-    transform: translateX(calc(-1 * var(--w)));
-    /* caché à gauche */
+    &.open {
+        width: var(--w);
+    }
 }
 
 .palette__header {
@@ -277,7 +280,7 @@
     justify-content: space-between;
     padding: 10px 12px;
     font-weight: 600;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--background-color-200);
 }
 
 .palette__close {
@@ -285,20 +288,8 @@
     width: 28px;
     height: 28px;
     border-radius: 6px;
-    background: #f2f4f7;
+    background: var(--background-color-200);
     cursor: pointer;
-}
-
-.palette__search {
-    padding: 8px 12px;
-    border-bottom: 1px solid #f3f4f6;
-}
-
-.palette__search input {
-    width: 100%;
-    padding: 6px 8px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
 }
 
 .palette__groups {
@@ -309,7 +300,7 @@
 .palette__title {
     margin: 10px 6px 6px;
     font-size: 12px;
-    color: #667085;
+    color: var(--background-color-500);
     text-transform: uppercase;
 }
 
@@ -324,17 +315,74 @@
     align-items: center;
     gap: 8px;
     padding: 8px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--background-color-200);
     border-radius: 10px;
-    background: #fff;
+    background: var(--background-color-50);
     cursor: grab;
     user-select: none;
 }
 
 .palette__item:hover {
-    background: #f9fafb;
+    background: var(--background-color-200);
 }
 
 .palette__item i {
     font-size: 16px;
+}
+
+.configuration__container {
+    --h: 320px;
+    height: 0;
+    width: 100%;
+    transition: height 160ms ease;
+    background: var(--background-color-50);
+    border-top: 1px solid var(--background-color-200);
+    overflow: hidden;
+
+    &.open {
+        height: var(--h);
+        overflow: visible !important;
+    }
+
+    .configuration__wrapper {
+        height: 100%;
+        display: flex;
+        justify-content: space-between;
+        position: relative;
+
+        >* {
+            height: 100%;
+            overflow: auto;
+        }
+
+        .config__wrapper {
+            min-width: 30%;
+            position: absolute;
+            transform: translateX(-50%);
+            left: 50%;
+            border: 1px solid var(--background-color-200);
+            height: calc(100% + 36px);
+            border-radius: 16px 16px 0 0;
+            border-bottom: none;
+            bottom: 0;
+            background-color: var(--background-color-50);
+            padding: 16px;
+        }
+
+        .inputs__wrapper,
+        .outputs__wrapper {
+            width: 35%;
+        }
+    }
+}
+
+::ng-deep {
+    :root {
+        --dot-size: .01rem;
+    }
+
+    .p-tabpanels,
+    .p-tablist-tab-list {
+        background: none !important;
+    }
 }
