@@ -3,7 +3,52 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChange
 import { CommonModule } from '@angular/common';
 import { ButtonModule } from 'primeng/button';
 import { GFlowNode } from '../../core/gflow.types';
-import { ensureAgentGroupConfig } from './agent-group-config';
+
+export interface AgentGroupConfig {
+  map: Record<string, unknown>;
+  ids: string[];
+}
+
+export const createAgentGroupConfig = (): AgentGroupConfig => ({
+  map: {},
+  ids: [],
+});
+
+const isAgentGroupConfig = (value: unknown): value is AgentGroupConfig =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const cloneMap = (value: Record<string, unknown>): Record<string, unknown> =>
+  JSON.parse(JSON.stringify(value));
+
+export const ensureAgentGroupConfig = (node: GFlowNode): AgentGroupConfig => {
+  const cfg = node.config as AgentGroupConfig | undefined;
+  if (!isAgentGroupConfig(cfg)) {
+    node.config = createAgentGroupConfig();
+  }
+
+  const normalized = node.config as AgentGroupConfig;
+  normalized.map ??= {};
+  normalized.ids ??= [];
+  return normalized;
+};
+
+export const updateAgentGroupConfig = (
+  node: GFlowNode,
+  updates: Partial<AgentGroupConfig>,
+): AgentGroupConfig => {
+  const cfg = ensureAgentGroupConfig(node);
+  if (updates.map) {
+    cfg.map = cloneMap(updates.map);
+  }
+  if (updates.ids) {
+    cfg.ids = [...updates.ids];
+  }
+
+  return {
+    map: cloneMap(cfg.map),
+    ids: [...cfg.ids],
+  };
+};
 
 type ConfigEvent =
   | { type: 'entries-changed' }
@@ -78,7 +123,6 @@ export class ConfigAgentGroup implements OnInit, OnChanges {
   private refresh() {
     if (!this.node) return;
     const cnt = this.node.entries?.length ?? 0;
-    const cfg = ensureAgentGroupConfig(this.node);
     const children: string[] = [];
 
     this.view = Array.from({ length: cnt }).map((_, idx) => {
@@ -92,7 +136,7 @@ export class ConfigAgentGroup implements OnInit, OnChanges {
       return { agent: child };
     });
 
-    cfg.ids = children;
+    updateAgentGroupConfig(this.node, { ids: children });
   }
 
   private persistIds() {

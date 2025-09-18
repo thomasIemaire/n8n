@@ -5,7 +5,67 @@ import { SelectModule } from 'primeng/select';
 import { InputTextModule } from 'primeng/inputtext';
 import { ButtonModule } from 'primeng/button';
 import { GFlowNode } from '../../core/gflow.types';
-import { Condition, IF_OPERATORS, cloneConditions, createCondition } from './if-config';
+
+export interface Condition {
+  left: string;
+  operator: string;
+  right: unknown;
+  rightIsKey?: boolean;
+}
+
+export interface IfConfig {
+  conditions: Condition[];
+}
+
+export const createCondition = (): Condition => ({
+  left: '',
+  operator: '==',
+  right: '',
+});
+
+export const cloneConditions = (conditions: Condition[]): Condition[] =>
+  conditions.map((condition) => ({ ...condition }));
+
+export const createIfConfig = (): IfConfig => ({
+  conditions: [createCondition()],
+});
+
+const isIfConfig = (value: unknown): value is IfConfig =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+export const ensureIfConfig = (node: GFlowNode): IfConfig => {
+  const cfg = node.config as IfConfig | undefined;
+  const source = isIfConfig(cfg) && Array.isArray(cfg.conditions) && cfg.conditions.length
+    ? cfg.conditions
+    : createIfConfig().conditions;
+
+  const normalized: IfConfig = {
+    conditions: cloneConditions(source),
+  };
+
+  node.config = normalized;
+  return normalized;
+};
+
+export const applyIfConditions = (node: GFlowNode, conditions: Condition[]): Condition[] => {
+  const normalized = ensureIfConfig(node);
+  const cloned = cloneConditions(conditions);
+  normalized.conditions = cloned;
+  return cloneConditions(cloned);
+};
+
+export const IF_OPERATORS = [
+  { label: '== égal', value: '==' },
+  { label: '!= différent', value: '!=' },
+  { label: '> supérieur', value: '>' },
+  { label: '>= supérieur ou égal', value: '>=' },
+  { label: '< inférieur', value: '<' },
+  { label: '<= inférieur ou égal', value: '<=' },
+  { label: 'contient', value: 'contains' },
+  { label: 'commence par', value: 'startsWith' },
+  { label: 'est vide', value: 'isEmpty' },
+  { label: 'n’est pas vide', value: 'notEmpty' },
+];
 
 @Component({
   selector: 'app-config-if',
@@ -91,13 +151,8 @@ export class ConfigIf implements OnInit, OnChanges {
   }
 
   private syncFromNode() {
-    const config = (this.node.config as { conditions?: Condition[] } | undefined) ?? {};
-    const source = Array.isArray(config.conditions) && config.conditions.length
-      ? config.conditions
-      : [createCondition()];
-
-    this.node.config = { ...config, conditions: cloneConditions(source) };
-    this.conditions = cloneConditions(source);
+    const cfg = ensureIfConfig(this.node);
+    this.conditions = cloneConditions(cfg.conditions);
   }
 
   private refreshKeys() {
@@ -141,8 +196,7 @@ export class ConfigIf implements OnInit, OnChanges {
   }
 
   emit() {
-    const snapshot = cloneConditions(this.conditions);
-    this.node.config = { ...(this.node.config as any), conditions: snapshot };
+    const snapshot = applyIfConditions(this.node, this.conditions);
     this.configChange.emit(snapshot);
   }
 }
