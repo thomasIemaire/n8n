@@ -1,98 +1,28 @@
 import { CommonModule } from '@angular/common';
 import {
-  Component, ElementRef, ViewChild,
-  NgZone, ChangeDetectorRef, AfterViewInit, OnDestroy,
-  Type,
+  Component,
+  ElementRef,
+  ViewChild,
+  NgZone,
+  ChangeDetectorRef,
+  AfterViewInit,
+  OnDestroy,
   ViewContainerRef,
-  ComponentRef
+  ComponentRef,
 } from '@angular/core';
+import { TabsModule } from 'primeng/tabs';
 import { Node } from './node/node';
 import { NodeFactory } from './core/node.factory';
-import { TabsModule } from 'primeng/tabs';
+import {
+  GFlowLink,
+  GFlowNode,
+  JsonValue,
+  PortKind,
+  PortRef,
+} from './core/gflow.types';
+import { PaletteGroup, PaletteItem, PALETTE_GROUPS } from './core/node-definitions';
 
-export interface GFlowPort { name?: string; map?: JSON; }
-export interface GFlowConfig { }
-export interface GFlowNode {
-  id: string;
-  name: string;
-  type: string;
-  x: number;
-  y: number;
-  inputs: GFlowPort[];
-  outputs: GFlowPort[];
-  entries?: GFlowPort[];
-  exits?: GFlowPort[];
-  configured?: boolean;
-  focused?: boolean;
-  config?: GFlowConfig;
-  configComponent?: Type<any>;
-}
-
-export class GFlowNodeModel implements GFlowNode {
-  id: string = '';
-  name: string = '';
-  type: string = '';
-  x: number = 0;
-  y: number = 0;
-  inputs: GFlowPort[] = [];
-  outputs: GFlowPort[] = [];
-  entries: GFlowPort[] = [];
-  exits: GFlowPort[] = [];
-  configured?: boolean;
-  focused?: boolean;
-  config?: GFlowConfig;
-  configComponent?: any;
-
-  constructor(init?: Partial<GFlowNode>) {
-    if (init) {
-      this.id = init.id || Date.now().toString();
-      this.name = init.name || '';
-      this.type = init.type || '';
-      this.x = init.x ?? 0;
-      this.y = init.y ?? 0;
-      this.inputs = init.inputs || [];
-      this.outputs = init.outputs || [];
-      this.entries = init.entries || [];
-      this.exits = init.exits || [];
-      this.configured = init.configured ?? undefined;
-      this.focused = init.focused ?? false;
-      this.config = init.config || {};
-      this.configComponent = init.configComponent || null;
-    }
-  }
-}
-
-export type JSONValue = string | number | boolean | null | JSONValue[] | { [k: string]: JSONValue };
-export type JSON = JSONValue;
-
-export interface GFlowLink {
-  id: string;
-  src: PortRef;
-  dst: PortRef;
-  relation: 'io' | 'entry-exit';  // <— nouveau
-  d?: string;
-  mid?: { x: number; y: number };
-  map?: JSON;
-}
-
-type PortKind = 'in' | 'out' | 'entry' | 'exit';
-interface PortRef { nodeId: string; portIndex: number; kind: PortKind; }
 interface PendingLink { from: PortRef; mouse: { x: number; y: number }; }
-
-/* ---------- Palette ---------- */
-type NodeType =
-  | 'start'
-  | 'end-success' | 'end-error'
-  | 'if' | 'merge' | 'edit'
-  | 'sardine'
-  | 'agent' | 'agent-group';
-
-interface PaletteItem {
-  type: NodeType;
-  label: string;
-  icon: string; // PrimeIcons class
-}
-interface PaletteGroup { name: string; items: PaletteItem[]; }
 
 @Component({
   selector: 'app-gflow', standalone: true,
@@ -777,14 +707,18 @@ export class Gflow implements AfterViewInit, OnDestroy {
   private deepClone<T>(v: T): T {
     return JSON.parse(JSON.stringify(v));
   }
-  private isPlainObject(v: any): v is Record<string, any> {
-    return v && typeof v === 'object' && !Array.isArray(v);
+
+  private isPlainObject(v: unknown): v is Record<string, unknown> {
+    return typeof v === 'object' && v !== null && !Array.isArray(v);
   }
-  private mergeJSON(a: JSON, b: JSON): JSON {
+
+  private mergeJson(a: JsonValue, b: JsonValue): JsonValue {
     if (this.isPlainObject(a) && this.isPlainObject(b)) {
       const out: any = { ...a };
       for (const k of Object.keys(b)) {
-        out[k] = k in out ? this.mergeJSON((a as any)[k], (b as any)[k]) : this.deepClone((b as any)[k]);
+        out[k] = k in out
+          ? this.mergeJson((a as any)[k], (b as any)[k])
+          : this.deepClone((b as any)[k]);
       }
       return out;
     }
@@ -793,10 +727,10 @@ export class Gflow implements AfterViewInit, OnDestroy {
   }
 
   /** Fusionne toutes les maps des liens io entrants vers ce nœud */
-  private aggregateIncomingMap(nodeId: string): JSON {
+  private aggregateIncomingMap(nodeId: string): JsonValue {
     const ins = this.links.filter(l => l.relation === 'io' && l.dst.nodeId === nodeId && l.dst.kind === 'in');
-    let acc: JSON = {};
-    for (const l of ins) acc = this.mergeJSON(acc, l.map ?? {});
+    let acc: JsonValue = {};
+    for (const l of ins) acc = this.mergeJson(acc, l.map ?? {});
     return acc;
   }
 
@@ -812,19 +746,19 @@ export class Gflow implements AfterViewInit, OnDestroy {
       const childId = lk.dst.nodeId;
       // on prend l’output effectif de l’agent enfant (port 0 par convention)
       const childMap = this.effectiveOutputMap(childId, 0);
-      acc = this.mergeJSON(acc, childMap);
+      acc = this.mergeJson(acc, childMap);
     }
     return acc;
   }
 
   /** JSON déclaré sur l'output du nœud (ex: outputs[i].map) */
-  private nodeOutputOwnMap(nodeId: string, outIdx: number): JSON {
+  private nodeOutputOwnMap(nodeId: string, outIdx: number): JsonValue {
     const n = this.nodes.find(nn => nn.id === nodeId);
     return this.deepClone(n?.outputs?.[outIdx]?.map ?? {});
   }
 
   /** Map effective d'un output = entrées accumulées + apport de l'output */
-  private effectiveOutputMap(nodeId: string, outIdx: number): JSON {
+  private effectiveOutputMap(nodeId: string, outIdx: number): JsonValue {
     const n = this.nodes.find(nn => nn.id === nodeId);
     if (!n) return {};
 
@@ -832,12 +766,12 @@ export class Gflow implements AfterViewInit, OnDestroy {
       // input existant + concat (merge) des maps des agents reliés
       const incoming = this.aggregateIncomingMap(nodeId);
       const children = this.aggregatedChildrenMapForGroup(nodeId);
-      return this.mergeJSON(incoming, children);
+      return this.mergeJson(incoming, children);
     }
 
     const incoming = this.aggregateIncomingMap(nodeId);
     const own = this.nodeOutputOwnMap(nodeId, outIdx);
-    return this.mergeJSON(incoming, own);
+    return this.mergeJson(incoming, own);
   }
 
   /** Recalcule toutes les maps des liens sortants à partir d'un nœud, puis propage */
@@ -937,32 +871,7 @@ export class Gflow implements AfterViewInit, OnDestroy {
   public paletteSide: 'left' | 'right' = 'left';
   private readonly paletteWidth = 280; // doit matcher --w en CSS
 
-  public paletteGroups: PaletteGroup[] = [
-    {
-      name: 'Flux',
-      items: [
-        { type: 'start', label: 'Start', icon: 'pi pi-play' },
-        { type: 'end-success', label: 'Fin – Réussite', icon: 'pi pi-check-circle' },
-        { type: 'end-error', label: 'Fin – Erreur', icon: 'pi pi-times-circle' },
-      ]
-    },
-    {
-      name: 'Logique',
-      items: [
-        { type: 'if', label: 'If', icon: 'pi pi-arrow-right-arrow-left' },
-        { type: 'merge', label: 'Merge', icon: 'pi pi-sitemap' },
-        { type: 'edit', label: 'Edit', icon: 'pi pi-pencil' },
-      ]
-    },
-    {
-      name: 'Agents',
-      items: [
-        { type: 'sardine', label: 'Sardine', icon: 'pi pi-send' },
-        { type: 'agent', label: 'Agent', icon: 'pi pi-microchip-ai' },
-        { type: 'agent-group', label: 'Agent groupé', icon: 'pi pi-users' },
-      ]
-    }
-  ];
+  public paletteGroups: PaletteGroup[] = PALETTE_GROUPS;
 
   togglePalette(ev?: MouseEvent) {
     if (ev) ev.stopPropagation();
