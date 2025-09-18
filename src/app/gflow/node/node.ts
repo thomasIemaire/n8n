@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { GFlowNode } from '../gflow';
+import { GFlowNode } from '../core/gflow.types';
 
 @Component({
   selector: 'app-node',

@@ -4,14 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { SelectModule } from 'primeng/select';
 import { InputTextModule } from 'primeng/inputtext';
 import { ButtonModule } from 'primeng/button';
-import { GFlowNode } from '../../gflow';
-
-type Condition = {
-  left: string;
-  operator: string;
-  right: any;
-  rightIsKey?: boolean;
-};
+import { GFlowNode } from '../../core/gflow.types';
+import { Condition, IF_OPERATORS, cloneConditions, createCondition } from './if-config';
 
 @Component({
   selector: 'app-config-if',
@@ -88,18 +82,7 @@ export class ConfigIf implements OnInit, OnChanges {
 
   public conditions: Condition[] = [];
   public keys: string[] = [];
-  public operators = [
-    { label: '== égal', value: '==' },
-    { label: '!= différent', value: '!=' },
-    { label: '> supérieur', value: '>' },
-    { label: '>= supérieur ou égal', value: '>=' },
-    { label: '< inférieur', value: '<' },
-    { label: '<= inférieur ou égal', value: '<=' },
-    { label: 'contient', value: 'contains' },
-    { label: 'commence par', value: 'startsWith' },
-    { label: 'est vide', value: 'isEmpty' },
-    { label: 'n’est pas vide', value: 'notEmpty' },
-  ];
+  public operators = IF_OPERATORS;
 
   ngOnInit() { this.syncFromNode(); this.refreshKeys(); }
   ngOnChanges(changes: SimpleChanges) {
@@ -108,9 +91,13 @@ export class ConfigIf implements OnInit, OnChanges {
   }
 
   private syncFromNode() {
-    (this.node as any).config ??= {};
-    const cfg: any = this.node.config;
-    this.conditions = Array.isArray(cfg.conditions) ? [...cfg.conditions] : [{ left: '', operator: '==', right: '' }];
+    const config = (this.node.config as { conditions?: Condition[] } | undefined) ?? {};
+    const source = Array.isArray(config.conditions) && config.conditions.length
+      ? config.conditions
+      : [createCondition()];
+
+    this.node.config = { ...config, conditions: cloneConditions(source) };
+    this.conditions = cloneConditions(source);
   }
 
   private refreshKeys() {
@@ -145,7 +132,7 @@ export class ConfigIf implements OnInit, OnChanges {
   }
 
   add() {
-    this.conditions.push({ left: '', operator: '==', right: '' });
+    this.conditions.push(createCondition());
     this.emit();
   }
   remove(i: number) {
@@ -154,8 +141,8 @@ export class ConfigIf implements OnInit, OnChanges {
   }
 
   emit() {
-    // persiste dans le node + émet
-    (this.node as any).config.conditions = this.conditions;
-    this.configChange.emit(this.conditions);
+    const snapshot = cloneConditions(this.conditions);
+    this.node.config = { ...(this.node.config as any), conditions: snapshot };
+    this.configChange.emit(snapshot);
   }
 }

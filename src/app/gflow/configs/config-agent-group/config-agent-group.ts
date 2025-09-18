@@ -2,7 +2,16 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ButtonModule } from 'primeng/button';
-import { GFlowNode } from '../../gflow';
+import { GFlowNode } from '../../core/gflow.types';
+import { ensureAgentGroupConfig } from './agent-group-config';
+
+type ConfigEvent =
+  | { type: 'entries-changed' }
+  | { type: 'entry-removed'; index: number };
+
+interface AgentGroupRow {
+  agent: GFlowNode | null;
+}
 
 @Component({
   selector: 'app-config-agent-group',
@@ -20,9 +29,9 @@ import { GFlowNode } from '../../gflow';
         <div class="entry-col">Entry {{ i }}</div>
         <div class="arrow">⟶</div>
         <div class="agent-col" [class.missing]="!row.agent">
-          <ng-container *ngIf="row.agent; else noLink">
-            <strong>{{ row.agent?.name || 'Agent' }}</strong>
-            <span class="muted">({{ $any(row.agent?.config)?.agentName || 'n/a' }} – {{ $any(row.agent?.config)?.version || 'n/a' }})</span>
+          <ng-container *ngIf="row.agent as agent; else noLink">
+            <strong>{{ agent.name || 'Agent' }}</strong>
+            <span class="muted">({{ $any(agent.config)?.agentName || 'n/a' }} – {{ $any(agent.config)?.version || 'n/a' }})</span>
           </ng-container>
           <ng-template #noLink><em>non relié</em></ng-template>
         </div>
@@ -47,9 +56,9 @@ export class ConfigAgentGroup implements OnInit, OnChanges {
   @Input() nodes: GFlowNode[] = [];
   @Input() links: any[] = [];
 
-  @Output() configChange = new EventEmitter<any>();
+  @Output() configChange = new EventEmitter<ConfigEvent>();
 
-  public view: Array<{ agent: GFlowNode | null }> = [];
+  public view: AgentGroupRow[] = [];
 
   ngOnInit() { this.refresh(); }
   ngOnChanges(_c: SimpleChanges) { this.refresh(); }
@@ -69,6 +78,7 @@ export class ConfigAgentGroup implements OnInit, OnChanges {
   private refresh() {
     if (!this.node) return;
     const cnt = this.node.entries?.length ?? 0;
+    const cfg = ensureAgentGroupConfig(this.node);
     const children: string[] = [];
 
     this.view = Array.from({ length: cnt }).map((_, idx) => {
@@ -82,12 +92,10 @@ export class ConfigAgentGroup implements OnInit, OnChanges {
       return { agent: child };
     });
 
-    (this.node as any).config ??= { map: {}, ids: [] };
-    (this.node as any).config.ids = children;
+    cfg.ids = children;
   }
 
   private persistIds() {
-    (this.node as any).config ??= { map: {}, ids: [] };
-    if (!(this.node as any).config.ids) (this.node as any).config.ids = [];
+    ensureAgentGroupConfig(this.node);
   }
 }

@@ -56,8 +56,9 @@
                             </g>
 
                             <path class="wire wire--preview"
-                                [class.wire--dashed]="pendingLink?.from?.kind==='entry' || pendingLink?.from?.kind==='exit'"
-                                *ngIf="pendingLink" [attr.d]="pendingPreviewD" marker-end="url(#arrow)"></path>
+                                *ngIf="pendingLink as link"
+                                [class.wire--dashed]="link.from.kind === 'entry' || link.from.kind === 'exit'"
+                                [attr.d]="pendingPreviewD" marker-end="url(#arrow)"></path>
                         </svg>
 
                         <div class="link-toolbar" *ngIf="hoveredLink && hoveredLink.mid"

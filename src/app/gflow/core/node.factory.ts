@@ -1,105 +1,27 @@
-import { ConfigAgentGroup } from "../configs/config-agent-group/config-agent-group";
-import { ConfigAgent } from "../configs/config-agent/config-agent";
-import { ConfigIf } from "../configs/config-if/config-if";
-import { GFlowNode, GFlowNodeModel } from "../gflow";
+import { GFlowNode, GFlowNodeModel, NodeType } from './gflow.types';
+import { NODE_DEFINITION_MAP } from './node-definitions';
 
 export class NodeFactory {
-    public static createNode(type: string, x: number, y: number): GFlowNode {
-        switch (type) {
-            case 'start':
-                return new GFlowNodeModel({
-                    name: 'Start',
-                    type, x, y,
-                    inputs: [],
-                    outputs: [{}],
-                });
-
-            case 'end-success':
-                return new GFlowNodeModel({
-                    name: 'Fin (Réussite)',
-                    type, x, y,
-                    inputs: [{}],
-                    outputs: [],
-                });
-
-            case 'end-error':
-                return new GFlowNodeModel({
-                    name: 'Fin (Erreur)',
-                    type, x, y,
-                    inputs: [{}],
-                    outputs: [],
-                    config: { message: 'Le traitement n\'a pas abouti' },
-                });
-
-            case 'if':
-                return new GFlowNodeModel({
-                    name: 'If',
-                    type, x, y,
-                    inputs: [{}],
-                    outputs: [{ name: 'true' }, { name: 'false' }],
-                    configured: false,
-                    config: [{ left: '', operator: '==', right: '' }],
-                    configComponent: ConfigIf
-                });
-
-            case 'merge':
-                return new GFlowNodeModel({
-                    name: 'Merge',
-                    type, x, y,
-                    inputs: [{}],
-                    outputs: [{}],
-                    configured: false,
-                });
-
-            case 'edit':
-                return new GFlowNodeModel({
-                    name: 'Edit',
-                    type, x, y,
-                    inputs: [{}],
-                    outputs: [{}],
-                    configured: false,
-                    config: [{ field: '', value: '' }],
-                });
-
-            case 'sardine':
-                return new GFlowNodeModel({
-                    name: 'Sardine',
-                    type, x, y,
-                    inputs: [{}],
-                    outputs: [
-                        { name: 'valide', map: { sardine: { status: "success", type: "SARDINE_FILE_TYPE" } } },
-                        { name: 'invalide', map: { sardine: { status: "error", type: "SARDINE_FILE_TYPE" } } },
-                    ],
-                    configured: false,
-                    config: []
-                });
-
-            case 'agent':
-                return new GFlowNodeModel({
-                    name: 'Agent',
-                    type, x, y,
-                    inputs: [{}],
-                    outputs: [{}],
-                    exits: [{}],
-                    configured: false,
-                    config: { id: '' },
-                    configComponent: ConfigAgent
-                });
-
-            case 'agent-group':
-                return new GFlowNodeModel({
-                    name: 'Agent groupé',
-                    type, x, y,
-                    inputs: [{}],
-                    outputs: [{}],
-                    entries: [{}, {}],
-                    configured: false,
-                    config: { map: {}, ids: [] },
-                    configComponent: ConfigAgentGroup
-                });
-
-            default:
-                throw new Error(`Unknown node type: ${type}`);
-        }
+  public static createNode(type: NodeType, x: number, y: number): GFlowNode {
+    const definition = NODE_DEFINITION_MAP[type];
+    if (!definition) {
+      throw new Error(`Unknown node type: ${type}`);
     }
+
+    const blueprint = definition.create();
+
+    return new GFlowNodeModel({
+      type,
+      name: blueprint.name,
+      x,
+      y,
+      inputs: blueprint.inputs ?? [],
+      outputs: blueprint.outputs ?? [],
+      entries: blueprint.entries ?? [],
+      exits: blueprint.exits ?? [],
+      configured: blueprint.configured,
+      config: blueprint.config,
+      configComponent: blueprint.configComponent ?? null,
+    });
+  }
 }
