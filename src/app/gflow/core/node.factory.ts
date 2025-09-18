@@ -1,4 +1,6 @@
+import { ConfigAgentGroup } from "../configs/config-agent-group/config-agent-group";
 import { ConfigAgent } from "../configs/config-agent/config-agent";
+import { ConfigIf } from "../configs/config-if/config-if";
 import { GFlowNode, GFlowNodeModel } from "../gflow";
 
 export class NodeFactory {
@@ -37,6 +39,7 @@ export class NodeFactory {
                     outputs: [{ name: 'true' }, { name: 'false' }],
                     configured: false,
                     config: [{ left: '', operator: '==', right: '' }],
+                    configComponent: ConfigIf
                 });
 
             case 'merge':
@@ -91,7 +94,8 @@ export class NodeFactory {
                     outputs: [{}],
                     entries: [{}, {}],
                     configured: false,
-                    config: { map: {}, ids: [] }
+                    config: { map: {}, ids: [] },
+                    configComponent: ConfigAgentGroup
                 });
 
             default:

@@ -19,7 +19,8 @@
             <div #viewport class="viewport__container" (wheel)="onWheel($event)" (mousemove)="onMouseMove($event)"
                 (document:mousedown)="onDocMouseDown($event)" (document:mousemove)="onDocMouseMove($event)"
                 (document:mouseup)="onDocMouseUp($event)" (dragover)="onWorldDragOver($event)"
-                (drop)="onWorldDrop($event)">
+                (drop)="onWorldDrop($event)" (mousedown)="onViewportMouseDown($event)"
+                (click)="onViewportClick($event)">
                 <div class="canvas">
                     <svg class="dot__background" preserveAspectRatio="none">
                         <defs>
@@ -63,9 +64,6 @@
                             [style.left.px]="hoveredLink.mid!.x" [style.top.px]="hoveredLink.mid!.y"
                             (mousedown)="$event.stopPropagation()" (click)="$event.stopPropagation()"
                             (mouseenter)="enterToolbar()" (mouseleave)="leaveToolbar()">
-                            <button class="link-btn" title="Insérer un nœud" (click)="splitLink(hoveredLink!)">
-                                <i class="pi pi-plus"></i>
-                            </button>
                             <button class="link-btn" title="Supprimer le lien" (click)="removeLink(hoveredLink!)">
                                 <i class="pi pi-trash"></i>
                             </button>
@@ -76,8 +74,8 @@
                             [style.zIndex]="n.focused ? 10 : 1" (mousedown)="startDrag($event, n)"
                             (mouseenter)="enterNode(n)" (mouseleave)="leaveNode()"
                             [class.is-dragging]="draggingNode?.id === n.id" [class.io-hidden]="ioHidden(n)"
-                            [class.exit-hidden]="exitHidden(n)" [item]="n" (click)="focusNode(n)"
-                            (dblclick)="centerNode(n)">
+                            [class.exit-hidden]="exitHidden(n)" [item]="n"
+                            (click)="focusNode(n); $event.stopPropagation()" (dblclick)="centerNode(n)">
                         </app-node>
 
                         <!-- TOOLBAR NŒUD -->
@@ -91,7 +89,8 @@
                             <button class="nt-btn" title="Supprimer le nœud" (click)="deleteNode(hoveredNode!)">
                                 <i class="pi pi-trash"></i>
                             </button>
-                            <button class="nt-btn" title="Paramétrer le nœud" (click)="focusNode(hoveredNode!)">
+                            <button class="nt-btn" title="Paramétrer le nœud"
+                                (click)="focusNode(hoveredNode!); openConfig()">
                                 <i class="pi pi-cog"></i>
                             </button>
                         </div>

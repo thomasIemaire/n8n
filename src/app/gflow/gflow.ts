@@ -198,6 +198,8 @@ export class Gflow implements AfterViewInit, OnDestroy {
     this.loadConfigComponent();
   }
 
+  deselectAll() { this.closeConfig(); }
+
   centerNode(n: GFlowNode) {
     this.focusNode(n);
     const rect = this.viewport.nativeElement.getBoundingClientRect();
@@ -352,13 +354,61 @@ export class Gflow implements AfterViewInit, OnDestroy {
     this.oy = cy - (cy - this.oy) * (this.scale / prev);
     this.scheduleUpdateWires();
   }
-  public onMouseMove(ev: MouseEvent) {
+
+  // --- pan detection
+  private isPanning = false;
+  private panStart = { x: 0, y: 0 };
+  private panMoved = false;
+  private skipNextClick = false;
+
+  onViewportMouseDown(ev: MouseEvent) {
+    // bouton gauche, pas de drag node/lien en cours
+    if (ev.button !== 0) return;
     if (this.draggingNode || this.pendingLink) return;
-    if (ev.buttons & 1) {
+
+    this.isPanning = true;
+    this.panMoved = false;
+    this.panStart = { x: ev.clientX, y: ev.clientY };
+  }
+
+  public onMouseMove(ev: MouseEvent) {
+    // si on est en train de panner
+    if (this.isPanning && (ev.buttons & 1) && !this.draggingNode && !this.pendingLink) {
+      // petit seuil pour distinguer click vs pan
+      if (!this.panMoved) {
+        const dx0 = Math.abs(ev.clientX - this.panStart.x);
+        const dy0 = Math.abs(ev.clientY - this.panStart.y);
+        if (dx0 + dy0 > 3) this.panMoved = true; // seuil 3px
+      }
       this.ox += ev.movementX;
       this.oy += ev.movementY;
       this.scheduleUpdateWires();
+      return;
     }
+
+    // (ton ancien code de pan au bouton gauche n'est plus nécessaire ici)
+    // s'il te faut garder la compatibilité :
+    // if (!this.draggingNode && !this.pendingLink && (ev.buttons & 1)) { ... }
+  }
+
+  public onDocMouseUp(_ev: MouseEvent) {
+    // fin du pan -> ignorer le prochain click si on a vraiment bougé
+    if (this.isPanning) {
+      if (this.panMoved) this.skipNextClick = true;
+      this.isPanning = false;
+      this.panMoved = false;
+    }
+    this.finishLink(_ev);
+    this.draggingNode = null;
+  }
+
+  onViewportClick(ev: MouseEvent) {
+    // si on vient de panner, on consomme le click
+    if (this.skipNextClick) {
+      this.skipNextClick = false;
+      return;
+    }
+    this.deselectAll(); // ton comportement initial
   }
 
   // ----- drag & drop nœud
@@ -431,18 +481,34 @@ export class Gflow implements AfterViewInit, OnDestroy {
       this.scheduleUpdateWires();
     }
   }
-  public onDocMouseUp(_ev: MouseEvent) {
-    this.finishLink(_ev);
-    this.draggingNode = null;
-    this.dragGroup = [];
-  }
 
   onNodeConfigChange = (_evt: any) => {
     if (!this.focusedNode) return;
-    // propage l’accumulation à partir du nœud dont l’output a changé
+
+    // si c’est un agent: ses parents groupés doivent ré-agréger
+    for (const pg of this.parentAgentGroupsOf(this.focusedNode.id)) {
+      this.recomputeDownstreamFrom(pg);
+    }
+
+    // puis recalcul “classique” depuis le node lui-même (utile pour les autres types)
     this.recomputeDownstreamFrom(this.focusedNode.id);
+
+    // rafraîchir UI du panneau courant
+    this.pushFocusedGraph();
+    this.pushFocusedInputMap();
     this.scheduleUpdateWires();
+    this.cdr.markForCheck();
   };
+
+  private parentAgentGroupsOf(childId: string): string[] {
+    const ids = new Set<string>();
+    this.links.forEach(l => {
+      if (l.relation === 'entry-exit' && l.dst.nodeId === childId && l.dst.kind === 'exit') {
+        ids.add(l.src.nodeId); // le groupé
+      }
+    });
+    return [...ids];
+  }
 
   // ================== LIENS ==================
   public onDocMouseDown(ev: MouseEvent) {
@@ -451,6 +517,8 @@ export class Gflow implements AfterViewInit, OnDestroy {
     if (!portEl) return;
 
     ev.preventDefault(); ev.stopPropagation();
+
+    this.skipNextClick = true;
 
     const host = portEl.closest('[data-node-id]') as HTMLElement;
     const nodeId = host.getAttribute('data-node-id')!;
@@ -513,25 +581,18 @@ export class Gflow implements AfterViewInit, OnDestroy {
           map: mapJson
         });
       }
+
+      if (relation === 'entry-exit') {
+        const groupId = a.kind === 'entry' ? a.nodeId : b.nodeId;
+        this.recomputeDownstreamFrom(groupId);
+        this.pushFocusedGraph();
+      }
     }
 
     this.pendingLink = null;
     this.pendingPreviewD = '';
     this.scheduleUpdateWires();
-  }
-
-  private defaultLinkMapJSON(src: PortRef, dst: PortRef): JSON {
-    const srcNode = this.nodes.find(n => n.id === src.nodeId);
-    const schema = (srcNode?.config as any)?.schema ?? {};
-
-    return {
-      sourceNodeId: src.nodeId,
-      srcPort: src.portIndex,
-      targetNodeId: dst.nodeId,
-      dstPort: dst.portIndex,
-      schema,
-      mapping: {}
-    };
+    this.pushFocusedGraph();
   }
 
   private portCenterWorld(ref: PortRef) {
@@ -658,6 +719,19 @@ export class Gflow implements AfterViewInit, OnDestroy {
     this.links = this.links.filter(l => l.id !== link.id);
     if (this.hoveredLinkId === link.id) this.hoveredLinkId = null;
     if (link.relation === 'io') this.recomputeDownstreamFrom(link.dst.nodeId);
+    const groupIds = new Set<string>();
+    if (link.relation === 'entry-exit') {
+      // le groupé est celui qui détient l'entry
+      const gid = link.src.kind === 'entry' ? link.src.nodeId :
+        (link.dst.kind === 'entry' ? link.dst.nodeId : null);
+      if (gid) groupIds.add(gid);
+    }
+
+    this.links = this.links.filter(l => l.id !== link.id);
+    if (this.hoveredLinkId === link.id) this.hoveredLinkId = null;
+
+    groupIds.forEach(gid => this.recomputeDownstreamFrom(gid));
+    this.pushFocusedGraph();
     this.scheduleUpdateWires();
   }
 
@@ -726,6 +800,23 @@ export class Gflow implements AfterViewInit, OnDestroy {
     return acc;
   }
 
+  private aggregatedChildrenMapForGroup(groupId: string): any {
+    let acc: any = {};
+    const entryLinks = this.links.filter(l =>
+      l.relation === 'entry-exit' &&
+      l.src.nodeId === groupId &&
+      l.src.kind === 'entry' &&
+      l.dst.kind === 'exit'
+    );
+    for (const lk of entryLinks) {
+      const childId = lk.dst.nodeId;
+      // on prend l’output effectif de l’agent enfant (port 0 par convention)
+      const childMap = this.effectiveOutputMap(childId, 0);
+      acc = this.mergeJSON(acc, childMap);
+    }
+    return acc;
+  }
+
   /** JSON déclaré sur l'output du nœud (ex: outputs[i].map) */
   private nodeOutputOwnMap(nodeId: string, outIdx: number): JSON {
     const n = this.nodes.find(nn => nn.id === nodeId);
@@ -734,6 +825,16 @@ export class Gflow implements AfterViewInit, OnDestroy {
 
   /** Map effective d'un output = entrées accumulées + apport de l'output */
   private effectiveOutputMap(nodeId: string, outIdx: number): JSON {
+    const n = this.nodes.find(nn => nn.id === nodeId);
+    if (!n) return {};
+
+    if (n.type === 'agent-group') {
+      // input existant + concat (merge) des maps des agents reliés
+      const incoming = this.aggregateIncomingMap(nodeId);
+      const children = this.aggregatedChildrenMapForGroup(nodeId);
+      return this.mergeJSON(incoming, children);
+    }
+
     const incoming = this.aggregateIncomingMap(nodeId);
     const own = this.nodeOutputOwnMap(nodeId, outIdx);
     return this.mergeJSON(incoming, own);
@@ -771,16 +872,64 @@ export class Gflow implements AfterViewInit, OnDestroy {
     this.configCmpRef = this.configHost.createComponent(n.configComponent);
     this.configCmpRef.setInput('node', n);
 
-    // écouter l’Output émis par le panneau de config
+    this.pushFocusedInputMap();
+    this.pushFocusedGraph();
+
     const inst: any = this.configCmpRef.instance;
     if (inst?.configChange?.subscribe) {
-      inst.configChange.subscribe((_evt: any) => {
-        // => l’agent a changé de map : recalcul des maps accumulées
-        this.recomputeDownstreamFrom(n.id);
-        this.scheduleUpdateWires();
+      inst.configChange.subscribe((evt: any) => {
+        if (!this.focusedNode) return;
+
+        if (evt?.type === 'entry-removed') {
+          this.removeGroupEntry(this.focusedNode, evt.index);
+        }
+        if (evt?.type === 'entries-changed') {
+          // juste redessiner et recalculer la sortie groupée
+          this.recomputeDownstreamFrom(this.focusedNode.id);
+          this.scheduleUpdateWires();
+        }
+
+        // dans tous les cas
+        this.pushFocusedGraph();
         this.cdr.markForCheck();
       });
     }
+  }
+
+  private removeGroupEntry(group: GFlowNode, idx: number) {
+    // 1) supprimer le lien pour cette entry
+    this.links = this.links.filter(l =>
+      !(l.relation === 'entry-exit' &&
+        l.src.nodeId === group.id && l.src.kind === 'entry' && l.src.portIndex === idx)
+    );
+
+    // 2) réindexer les liens des entries suivantes
+    this.links.forEach(l => {
+      if (l.relation === 'entry-exit' && l.src.nodeId === group.id && l.src.kind === 'entry' && l.src.portIndex > idx) {
+        l.src.portIndex -= 1;
+      }
+    });
+
+    // 3) retirer l’entry dans le node
+    group.entries?.splice(idx, 1);
+
+    // 4) recalcul des sorties du groupé (concat de ses enfants)
+    this.recomputeDownstreamFrom(group.id);
+    this.scheduleUpdateWires();
+  }
+
+  private pushFocusedInputMap() {
+    if (!this.configCmpRef || !this.focusedNode) return;
+    const inst: any = this.configCmpRef.instance;
+    // on ne sait pas si le composant accepte 'inputMap' — setInput silencieux si non utilisé
+    const inputMap = this.aggregateIncomingMap(this.focusedNode.id);
+    this.configCmpRef.setInput?.('inputMap', this.deepClone(inputMap));
+  }
+
+  private pushFocusedGraph() {
+    if (!this.configCmpRef) return;
+    this.configCmpRef.setInput('nodes', this.nodes);
+    this.configCmpRef.setInput('links', this.links);
   }
 
   /* ==================== PALETTE (bouton +) ==================== */
