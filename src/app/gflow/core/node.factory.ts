@@ -1,5 +1,6 @@
 import { GFlowNode, GFlowNodeModel, NodeType } from './gflow.types';
 import { NODE_DEFINITION_MAP } from './node-definitions';
+import { initializeNodeConfig } from '../configs/node-config.registry';
 
 export class NodeFactory {
   public static createNode(type: NodeType, x: number, y: number): GFlowNode {
@@ -10,7 +11,7 @@ export class NodeFactory {
 
     const blueprint = definition.create();
 
-    return new GFlowNodeModel({
+    const node = new GFlowNodeModel({
       type,
       name: blueprint.name,
       x,
@@ -23,5 +24,9 @@ export class NodeFactory {
       config: blueprint.config,
       configComponent: blueprint.configComponent ?? null,
     });
+
+    initializeNodeConfig(node);
+
+    return node;
   }
 }

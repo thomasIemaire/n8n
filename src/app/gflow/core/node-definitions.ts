@@ -1,11 +1,10 @@
-import { ConfigAgentGroup } from '../configs/config-agent-group/config-agent-group';
-import { ConfigAgent } from '../configs/config-agent/config-agent';
-import { ConfigIf } from '../configs/config-if/config-if';
+import { ConfigAgentGroup, createAgentGroupConfig } from '../configs/config-agent-group/config-agent-group';
 import {
+  ConfigAgent,
   createAgentConfig,
-} from '../configs/config-agent/agent-config';
-import { createAgentGroupConfig } from '../configs/config-agent-group/agent-group-config';
-import { createCondition } from '../configs/config-if/if-config';
+  createAgentOutputPorts,
+} from '../configs/config-agent/config-agent';
+import { ConfigIf, createIfConfig } from '../configs/config-if/config-if';
 import { GFlowPort, JsonValue, NodeType } from './gflow.types';
 
 const cloneJson = <T extends JsonValue>(value: T): T =>
@@ -94,7 +93,7 @@ const definitions: NodeTypeDefinition[] = [
       inputs: clonePorts([{}]),
       outputs: clonePorts([{ name: 'true' }, { name: 'false' }]),
       configured: false,
-      config: { conditions: [createCondition()] },
+      config: createIfConfig(),
       configComponent: ConfigIf,
     }),
   },
@@ -147,7 +146,7 @@ const definitions: NodeTypeDefinition[] = [
     create: () => ({
       name: 'Agent',
       inputs: clonePorts([{}]),
-      outputs: clonePorts([{}]),
+      outputs: clonePorts(createAgentOutputPorts()),
       exits: clonePorts([{}]),
       configured: false,
       config: createAgentConfig(),
