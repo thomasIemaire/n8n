@@ -20,6 +20,7 @@ export type NodeType =
   | 'end-success'
   | 'end-error'
   | 'if'
+  | 'switch'
   | 'merge'
   | 'edit'
   | 'sardine'

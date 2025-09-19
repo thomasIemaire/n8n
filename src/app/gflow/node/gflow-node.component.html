@@ -1,0 +1,55 @@
+<div class="node__container" [style.width.px]="width || undefined" [style.height.px]="height || undefined">
+  <div
+    class="node__wrapper"
+    [class.start]="!item.inputs.length"
+    [class.end]="!item.outputs.length"
+    [class.unconfigurable]="item.configured === undefined"
+    [class.unconfigured]="!item.configured"
+    [class.focused]="item.focused"
+    [class.if]="item.type === 'if'"
+    [class.agent]="item.type === 'agent'"
+    [class.switch]="item.type === 'switch'"
+  >
+    @switch (item.type) {
+      @case ('start') { <span class="pi pi-caret-right"></span> }
+      @case ('end-success') { <span class="pi pi-check-circle"></span> }
+      @case ('end-error') { <span class="pi pi-times-circle"></span> }
+      @case ('if') { <span class="pi pi-arrow-right-arrow-left"></span> }
+      @case ('merge') { <span class="pi pi-sitemap"></span> }
+      @case ('edit') { <span class="pi pi-pencil"></span> }
+      @case ('sardine') { <span class="pi pi-send"></span> }
+      @case ('agent') { <span class="pi pi-microchip-ai"></span> }
+      @case ('agent-group') { <span class="pi pi-users"></span> }
+      @case ('switch') { <span class="pi pi-sliders-h"></span> }
+      @default { <span class="pi pi-plus"></span> }
+    }
+  </div>
+
+  <div class="node__name" [class.if]="item.type === 'if'">
+    <span>{{ item.name }}</span>
+  </div>
+
+  <div class="node-inputs__wrapper" [class.if]="item.type === 'if'">
+    <div class="input-port" *ngFor="let i of item.inputs; let idx = index" [attr.data-index]="idx">
+      <div *ngIf="i.name" class="input-port__name">{{ i.name }}</div>
+    </div>
+  </div>
+
+  <div class="node-outputs__wrapper" [class.if]="item.type === 'if'">
+    <div class="output-port" *ngFor="let o of item.outputs; let idx = index" [attr.data-index]="idx">
+      <div *ngIf="o.name" class="output-port__name">{{ o.name }}</div>
+    </div>
+  </div>
+
+  <div class="node-entries__wrapper" *ngIf="item.entries && item.entries.length">
+    <div class="entry-port" *ngFor="let e of item.entries; let idx = index" [attr.data-index]="idx">
+      <div *ngIf="e.name" class="entry-port__name">{{ e.name }}</div>
+    </div>
+  </div>
+
+  <div class="node-exits__wrapper" *ngIf="item.exits && item.exits.length">
+    <div class="exit-port" *ngFor="let e of item.exits; let idx = index" [attr.data-index]="idx">
+      <div *ngIf="e.name" class="exit-port__name">{{ e.name }}</div>
+    </div>
+  </div>
+</div>

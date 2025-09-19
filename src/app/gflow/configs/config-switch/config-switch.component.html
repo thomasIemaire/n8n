@@ -1,0 +1,39 @@
+<div class="config-switch">
+  <p-select
+    size="small"
+    [options]="keys"
+    [showClear]="true"
+    placeholder="Clé à évaluer"
+    [(ngModel)]="config.key"
+    (onChange)="onKeyChange($event.value)"
+    styleClass="w-full"
+  ></p-select>
+
+  <div class="cases">
+    <div class="case" *ngFor="let entry of config.cases; let i = index">
+      <input
+        pInputText
+        type="text"
+        placeholder="Nom du cas"
+        [(ngModel)]="entry.name"
+        (ngModelChange)="onCaseNameChange(i, $event)"
+      />
+      <input
+        pInputText
+        type="text"
+        placeholder="Valeur attendue"
+        [(ngModel)]="entry.value"
+        (ngModelChange)="onCaseValueChange(i, $event)"
+      />
+      <p-button
+        icon="pi pi-trash"
+        size="small"
+        severity="danger"
+        text
+        (click)="removeCase(i)"
+      ></p-button>
+    </div>
+  </div>
+
+  <p-button icon="pi pi-plus" label="Ajouter un cas" size="small" (click)="addCase()"></p-button>
+</div>
