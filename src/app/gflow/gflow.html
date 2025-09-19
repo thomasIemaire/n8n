@@ -101,34 +101,13 @@
             <div class="configuration__container" [class.open]="configOpen">
                 <div class="configuration__wrapper">
                     <div class="inputs__wrapper">
-                        <p-tabs [value]="0" *ngIf="focusedNode?.inputs?.length">
-                            <p-tablist>
-                                <p-tab [value]="i" *ngFor="let e of focusedNode?.inputs; let i = index">
-                                    {{ e.name || 'input' }}
-                                </p-tab>
-                            </p-tablist>
-                            <p-tabpanels>
-                                <p-tabpanel [value]="i" *ngFor="let e of focusedNode?.inputs; let i = index">
-                                    <ng-container *ngIf="inputLinksFor(i) as inLinks">
-                                        <ng-container *ngIf="inLinks.length; else noInput">
-                                            <div class="map-list">
-                                                <div class="map-card"
-                                                    *ngFor="let lk of inLinks; trackBy: trackByLinkId">
-                                                    <div class="map-card__meta">
-                                                        De <strong>{{ nodeName(lk.src.nodeId) }}</strong> (output {{
-                                                        lk.src.portIndex }})
-                                                    </div>
-                                                    <pre class="map-card__json">{{ lk.map | json }}</pre>
-                                                </div>
-                                            </div>
-                                        </ng-container>
-                                    </ng-container>
-                                    <ng-template #noInput>
-                                        <em>Aucun lien entrant pour cet input.</em>
-                                    </ng-template>
-                                </p-tabpanel>
-                            </p-tabpanels>
-                        </p-tabs>
+                        <app-node-io-panel
+                            [ports]="focusedNode?.inputs ?? null"
+                            [linksByIndex]="focusedInputLinks"
+                            [nodeNameFn]="nodeNameFn"
+                            [trackBy]="trackByLinkId"
+                            direction="incoming"
+                            emptyMessage="Aucun lien entrant pour cet input." />
                     </div>
                     <div class="config__wrapper">
                         <ng-container *ngIf="focusedNode as n">
@@ -141,34 +120,13 @@
                         </ng-container>
                     </div>
                     <div class="outputs__wrapper">
-                        <p-tabs [value]="0" *ngIf="focusedNode?.outputs?.length">
-                            <p-tablist>
-                                <p-tab [value]="i" *ngFor="let o of focusedNode?.outputs; let i = index">
-                                    {{ o.name || 'output' }}
-                                </p-tab>
-                            </p-tablist>
-                            <p-tabpanels>
-                                <p-tabpanel [value]="i" *ngFor="let o of focusedNode?.outputs; let i = index">
-                                    <ng-container *ngIf="outputLinksFor(i) as outLinks">
-                                        <ng-container *ngIf="outLinks.length; else noOutput">
-                                            <div class="map-list">
-                                                <div class="map-card"
-                                                    *ngFor="let lk of outLinks; trackBy: trackByLinkId">
-                                                    <div class="map-card__meta">
-                                                        Vers <strong>{{ nodeName(lk.dst.nodeId) }}</strong> (input {{
-                                                        lk.dst.portIndex }})
-                                                    </div>
-                                                    <pre class="map-card__json">{{ lk.map | json }}</pre>
-                                                </div>
-                                            </div>
-                                        </ng-container>
-                                    </ng-container>
-                                    <ng-template #noOutput>
-                                        <em>Aucun lien sortant pour cet output.</em>
-                                    </ng-template>
-                                </p-tabpanel>
-                            </p-tabpanels>
-                        </p-tabs>
+                        <app-node-io-panel
+                            [ports]="focusedNode?.outputs ?? null"
+                            [linksByIndex]="focusedOutputLinks"
+                            [nodeNameFn]="nodeNameFn"
+                            [trackBy]="trackByLinkId"
+                            direction="outgoing"
+                            emptyMessage="Aucun lien sortant pour cet output." />
                     </div>
                 </div>
             </div>

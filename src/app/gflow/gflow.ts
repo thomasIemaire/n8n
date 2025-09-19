@@ -10,7 +10,8 @@ import {
   ViewContainerRef,
   ComponentRef,
 } from '@angular/core';
-import { TabsModule } from 'primeng/tabs';
+import { ConfigBase } from '../shared/components/config-base/config-base';
+import { NodeIoPanelComponent } from '../shared/components/node-io-panel/node-io-panel.component';
 import { Node } from './node/node';
 import { NodeFactory } from './core/node.factory';
 import {
@@ -26,7 +27,7 @@ interface PendingLink { from: PortRef; mouse: { x: number; y: number }; }
 
 @Component({
   selector: 'app-gflow', standalone: true,
-  imports: [CommonModule, Node, TabsModule],
+  imports: [CommonModule, Node, NodeIoPanelComponent],
   templateUrl: './gflow.html',
   styleUrls: ['./gflow.scss']
 })
@@ -53,6 +54,8 @@ export class Gflow implements AfterViewInit, OnDestroy {
     return this.nodes.find(n => n.id === id)?.name || id;
   }
 
+  readonly nodeNameFn = (id: string) => this.nodeName(id);
+
   /** Tous les liens entrants (relation io) vers l'input #idx du focusedNode */
   inputLinksFor(idx: number): GFlowLink[] {
     if (!this.focusedNode) return [];
@@ -73,6 +76,16 @@ export class Gflow implements AfterViewInit, OnDestroy {
       l.src.kind === 'out' &&
       l.src.portIndex === idx
     );
+  }
+
+  get focusedInputLinks(): GFlowLink[][] {
+    if (!this.focusedNode?.inputs?.length) return [];
+    return this.focusedNode.inputs.map((_port, idx) => this.inputLinksFor(idx));
+  }
+
+  get focusedOutputLinks(): GFlowLink[][] {
+    if (!this.focusedNode?.outputs?.length) return [];
+    return this.focusedNode.outputs.map((_port, idx) => this.outputLinksFor(idx));
   }
 
   /** trackBy pour *ngFor sur les liens */
@@ -792,24 +805,27 @@ export class Gflow implements AfterViewInit, OnDestroy {
   }
 
   @ViewChild('configHost', { read: ViewContainerRef }) configHost!: ViewContainerRef;
-  private configCmpRef: ComponentRef<any> | null = null;
+  private configCmpRef: ComponentRef<ConfigBase> | null = null;
+  private configComponentInputs: Record<string, unknown> = {};
 
   private loadConfigComponent() {
     if (!this.configHost) return;
     this.configHost.clear();
     this.configCmpRef?.destroy();
     this.configCmpRef = null;
+    this.configComponentInputs = {};
 
     const n = this.focusedNode;
     if (!n?.configComponent) return;
 
-    this.configCmpRef = this.configHost.createComponent(n.configComponent);
-    this.configCmpRef.setInput('node', n);
-
+    this.configCmpRef = this.configHost.createComponent(ConfigBase);
+    this.configCmpRef.setInput('title', n.name || '');
+    this.configCmpRef.setInput('component', n.configComponent);
+    this.updateConfigInputs({ node: n });
     this.pushFocusedInputMap();
     this.pushFocusedGraph();
 
-    const inst: any = this.configCmpRef.instance;
+    const inst = this.configCmpRef.instance;
     if (inst?.configChange?.subscribe) {
       inst.configChange.subscribe((evt: any) => {
         if (!this.focusedNode) return;
@@ -853,17 +869,20 @@ export class Gflow implements AfterViewInit, OnDestroy {
   }
 
   private pushFocusedInputMap() {
-    if (!this.configCmpRef || !this.focusedNode) return;
-    const inst: any = this.configCmpRef.instance;
-    // on ne sait pas si le composant accepte 'inputMap' — setInput silencieux si non utilisé
+    if (!this.focusedNode) return;
     const inputMap = this.aggregateIncomingMap(this.focusedNode.id);
-    this.configCmpRef.setInput?.('inputMap', this.deepClone(inputMap));
+    this.updateConfigInputs({ inputMap: this.deepClone(inputMap) });
   }
 
   private pushFocusedGraph() {
-    if (!this.configCmpRef) return;
-    this.configCmpRef.setInput('nodes', this.nodes);
-    this.configCmpRef.setInput('links', this.links);
+    this.updateConfigInputs({ nodes: this.nodes, links: this.links });
+  }
+
+  private updateConfigInputs(partial: Record<string, unknown>) {
+    this.configComponentInputs = { ...this.configComponentInputs, ...partial };
+    if (this.configCmpRef) {
+      this.configCmpRef.setInput('componentInputs', this.configComponentInputs);
+    }
   }
 
   /* ==================== PALETTE (bouton +) ==================== */
