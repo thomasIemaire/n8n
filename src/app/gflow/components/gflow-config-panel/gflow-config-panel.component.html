@@ -1,0 +1,23 @@
+<ng-container *ngIf="node as current; else emptyState">
+  <ng-container *ngIf="current.configComponent; else noConfig">
+    <app-config-base
+      [title]="current.name || ''"
+      [component]="current.configComponent"
+      [componentInputs]="componentInputs"
+      (cancel)="cancel.emit()"
+      (save)="save.emit()"
+      (configChange)="configChange.emit($event)"
+    ></app-config-base>
+  </ng-container>
+  <ng-template #noConfig>
+    <div class="config-panel__empty">
+      <em>Aucun panneau de configuration pour ce nœud.</em>
+    </div>
+  </ng-template>
+</ng-container>
+
+<ng-template #emptyState>
+  <div class="config-panel__empty">
+    <em>Sélectionnez un nœud pour afficher sa configuration.</em>
+  </div>
+</ng-template>

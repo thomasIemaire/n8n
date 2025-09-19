@@ -5,6 +5,7 @@ import {
   createAgentOutputPorts,
 } from '../configs/config-agent/config-agent';
 import { ConfigIf, createIfConfig } from '../configs/config-if/config-if';
+import { ConfigSwitchComponent, createSwitchConfig } from '../configs/config-switch/config-switch.component';
 import { GFlowPort, JsonValue, NodeType } from './gflow.types';
 
 const cloneJson = <T extends JsonValue>(value: T): T =>
@@ -95,6 +96,20 @@ const definitions: NodeTypeDefinition[] = [
       configured: false,
       config: createIfConfig(),
       configComponent: ConfigIf,
+    }),
+  },
+  {
+    type: 'switch',
+    label: 'Switch / Case',
+    icon: 'pi pi-sliders-h',
+    category: 'Logique',
+    create: () => ({
+      name: 'Switch',
+      inputs: clonePorts([{}]),
+      outputs: clonePorts([{ name: 'Case 1' }]),
+      configured: false,
+      config: createSwitchConfig(),
+      configComponent: ConfigSwitchComponent,
     }),
   },
   {

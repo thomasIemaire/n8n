@@ -20,7 +20,7 @@
                 (document:mousedown)="onDocMouseDown($event)" (document:mousemove)="onDocMouseMove($event)"
                 (document:mouseup)="onDocMouseUp($event)" (dragover)="onWorldDragOver($event)"
                 (drop)="onWorldDrop($event)" (mousedown)="onViewportMouseDown($event)"
-                (click)="onViewportClick($event)">
+                (click)="onViewportClick()">
                 <div class="canvas">
                     <svg class="dot__background" preserveAspectRatio="none">
                         <defs>
@@ -70,18 +70,18 @@
                             </button>
                         </div>
 
-                        <app-node class="node" *ngFor="let n of nodes" [attr.data-node-id]="n.id" [style.left.px]="n.x"
-                            [style.top.px]="n.y" [style.width.px]="realNodeSize(n)" [style.height.px]="nodeSize"
-                            [style.zIndex]="n.focused ? 10 : 1" (mousedown)="startDrag($event, n)"
-                            (mouseenter)="enterNode(n)" (mouseleave)="leaveNode()"
+                        <app-gflow-node class="node" *ngFor="let n of nodes" [attr.data-node-id]="n.id"
+                            [style.left.px]="n.x" [style.top.px]="n.y" [style.zIndex]="n.focused ? 10 : 1"
+                            (mousedown)="startDrag($event, n)" (mouseenter)="enterNode(n)" (mouseleave)="leaveNode()"
                             [class.is-dragging]="draggingNode?.id === n.id" [class.io-hidden]="ioHidden(n)"
-                            [class.exit-hidden]="exitHidden(n)" [item]="n"
-                            (click)="focusNode(n); $event.stopPropagation()" (dblclick)="centerNode(n)">
-                        </app-node>
+                            [class.exit-hidden]="exitHidden(n)" [item]="n" [width]="nodeWidth(n)"
+                            [height]="nodeHeight(n)" (click)="focusNode(n); $event.stopPropagation()"
+                            (dblclick)="centerNode(n)">
+                        </app-gflow-node>
 
                         <!-- TOOLBAR NŒUD -->
                         <div class="node-toolbar" *ngIf="hoveredNode"
-                            [style.left.px]="hoveredNode!.x + realNodeSize(hoveredNode!) / 2"
+                            [style.left.px]="hoveredNode!.x + nodeWidth(hoveredNode!) / 2"
                             [style.top.px]="hoveredNode!.y" (mousedown)="$event.stopPropagation()"
                             (click)="$event.stopPropagation()" (mouseenter)="enterNodeToolbar()"
                             (mouseleave)="leaveNodeToolbar()">
@@ -110,14 +110,15 @@
                             emptyMessage="Aucun lien entrant pour cet input." />
                     </div>
                     <div class="config__wrapper">
-                        <ng-container *ngIf="focusedNode as n">
-                            <ng-container *ngIf="n.configComponent as Cmp; else noCfg">
-                                <ng-template #configHost></ng-template>
-                            </ng-container>
-                            <ng-template #noCfg>
-                                <em>Aucun panneau de configuration pour ce nœud.</em>
-                            </ng-template>
-                        </ng-container>
+                        <app-gflow-config-panel
+                            [node]="focusedNode"
+                            [nodes]="nodes"
+                            [links]="links"
+                            [inputMap]="focusedInputMap"
+                            (configChange)="onNodeConfigChange($event)"
+                            (cancel)="closeConfig()"
+                            (save)="closeConfig()"
+                        ></app-gflow-config-panel>
                     </div>
                     <div class="outputs__wrapper">
                         <app-node-io-panel

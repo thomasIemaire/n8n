@@ -5,6 +5,7 @@ import { SelectModule } from 'primeng/select';
 import { InputTextModule } from 'primeng/inputtext';
 import { ButtonModule } from 'primeng/button';
 import { GFlowNode } from '../../core/gflow.types';
+import { flattenInputKeys } from '../utils/input-map.utils';
 
 export interface Condition {
   left: string;
@@ -156,34 +157,7 @@ export class ConfigIf implements OnInit, OnChanges {
   }
 
   private refreshKeys() {
-    this.keys = this.flattenKeys(this.inputMap);
-  }
-
-  private flattenKeys(obj: any, base = ''): string[] {
-    const out: string[] = [];
-    const walk = (v: any, pref: string) => {
-      if (v === null || v === undefined) { out.push(pref || '$'); return; }
-      if (Array.isArray(v)) {
-        // On ne détaille pas les indices; on expose la clé comme tableau
-        out.push(pref || '$');
-        // si tu veux exposer les enfants: v.forEach((it, idx)=> walk(it, pref?`${pref}[${idx}]`:`[${idx}]`));
-        return;
-      }
-      if (typeof v === 'object') {
-        const keys = Object.keys(v);
-        if (!keys.length) { out.push(pref || '$'); return; }
-        for (const k of keys) {
-          const next = pref ? `${pref}.${k}` : k;
-          walk(v[k], next);
-        }
-        return;
-      }
-      // scalaire
-      out.push(pref || '$');
-    };
-    walk(obj, base);
-    // unicité + tri
-    return Array.from(new Set(out)).sort();
+    this.keys = flattenInputKeys(this.inputMap);
   }
 
   add() {
