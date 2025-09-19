@@ -1,9 +1,9 @@
 import { Component } from '@angular/core';
-import { Gflow } from "./gflow/gflow";
+import { GflowComponent } from './gflow/components/gflow/gflow.component';
 
 @Component({
   selector: 'app-root',
-  imports: [Gflow],
+  imports: [GflowComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })

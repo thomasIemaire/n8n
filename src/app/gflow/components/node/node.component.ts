@@ -1,15 +1,15 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { GFlowNode } from '../core/gflow.types';
+import { GFlowNode } from '../../core/gflow.types';
 
 @Component({
   selector: 'app-node',
   standalone: true,
   imports: [CommonModule],
-  templateUrl: './node.html',
-  styleUrls: ['./node.scss']
+  templateUrl: './node.component.html',
+  styleUrls: ['./node.component.scss']
 })
-export class Node {
+export class NodeComponent {
   @Input({ required: true })
   public item!: GFlowNode;
 
